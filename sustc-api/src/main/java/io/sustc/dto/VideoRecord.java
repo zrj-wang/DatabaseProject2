@@ -1,22 +1,10 @@
 package io.sustc.dto;
 
-<<<<<<< HEAD
-import com.opencsv.bean.AbstractCsvConverter;
-import com.opencsv.bean.CsvBindAndSplitByName;
-import com.opencsv.bean.CsvBindByName;
-import com.opencsv.exceptions.CsvDataTypeMismatchException;
-import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.val;
-
 import java.sql.Timestamp;
-import java.util.List;
-import java.util.regex.Pattern;
-
 
 @Data
 public class VideoRecord {
-
 
     /**
      * The BV code of this video
@@ -92,5 +80,4 @@ public class VideoRecord {
      * The watch durations in seconds for the viewers {@code viewerMids}
      */
     private float[] viewTime;
-
 }
