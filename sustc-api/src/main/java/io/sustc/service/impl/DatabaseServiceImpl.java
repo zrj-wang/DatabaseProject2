@@ -16,6 +16,7 @@ import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;
 
+//zrj-wang
 /**
  * It's important to mark your implementation class with {@link Service} annotation.
  * As long as the class is annotated and implements the corresponding interface, you can place it under any package.
@@ -36,9 +37,9 @@ public class DatabaseServiceImpl implements DatabaseService {
 
     @Override
     public List<Integer> getGroupMembers() {
-        throw new UnsupportedOperationException("TODO: replace this with your own student id");
-        // return Arrays.asList(12210000, 12210001, 12210002);
+         return Arrays.asList(12210403, 12210401);
     }
+
 
     @Override
     public void importData(
