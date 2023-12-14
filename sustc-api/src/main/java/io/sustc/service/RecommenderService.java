@@ -22,6 +22,10 @@ public interface RecommenderService {
      */
     List<String> recommendNextVideo(String bv);
 
+
+
+
+
     /**
      * Recommends videos for anonymous users, based on the popularity.
      * Evaluate the video's popularity from the following aspects:
@@ -52,6 +56,15 @@ public interface RecommenderService {
      */
     List<String> generalRecommendations(int pageSize, int pageNum);
 
+
+
+
+
+
+
+
+
+
     /**
      * Recommends videos for a user, restricted on their interests.
 
@@ -81,6 +94,16 @@ public interface RecommenderService {
      * If any of the corner case happened, {@code null} shall be returned.
      */
     List<String> recommendVideosForUser(AuthInfo auth, int pageSize, int pageNum);
+
+
+
+
+
+
+
+
+
+
 
     /**
      * Recommends friends for a user, based on their common followings.

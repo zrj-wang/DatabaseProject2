@@ -23,6 +23,10 @@ public interface UserService {
      */
     long register(RegisterUserReq req);
 
+
+
+
+
     /**
      * Deletes a user.
      *
@@ -47,6 +51,11 @@ public interface UserService {
      * If any of the corner case happened, {@code false} shall be returned.
      */
     boolean deleteAccount(AuthInfo auth, long mid);
+
+
+
+
+
     /**
      * Follow the user with {@code mid}.
      * If that user has already been followed, unfollow the user.
