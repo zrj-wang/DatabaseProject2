@@ -15,6 +15,7 @@ public interface DatabaseService {
      */
     List<Integer> getGroupMembers();
 
+
     /**
      * Imports data to an empty database.
      * Invalid data will not be provided.
@@ -28,6 +29,9 @@ public interface DatabaseService {
             List<UserRecord> userRecords,
             List<VideoRecord> videoRecords
     );
+
+
+
 
     /**
      * Truncates all tables in the database.

@@ -27,6 +27,9 @@ public interface DanmuService {
      */
     long sendDanmu(AuthInfo auth, String bv, String content, float time);
 
+
+
+
     /**
      * Display the danmus in a time range.
      * Similar to bilibili's mechanism, user can choose to only display part of the danmus to have a better watching
@@ -51,6 +54,9 @@ public interface DanmuService {
      * If any of the corner case happened, {@code null} shall be returned.
      */
     List<Long> displayDanmu(String bv, float timeStart, float timeEnd, boolean filter);
+
+
+
 
     /**
      * Likes a danmu.

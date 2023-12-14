@@ -22,7 +22,6 @@ public class UserInfoResp {
      */
     private int coin;
 
-
     /**
      * The user's following {@code mid}s.
      */
