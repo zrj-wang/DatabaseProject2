@@ -208,43 +208,109 @@ public class UserServiceImpl {
         return false;
     }
     private boolean isValidAuth(AuthInfo auth) {
-        // 检查auth是否为空
-        if (auth == null) {
+        // 确保至少提供了一个认证信息
+        if (auth.getPassword() == null && auth.getQq() == null && auth.getWechat() == null) {
             return false;
         }
 
-        try (Connection conn = dataSource.getConnection()) {
-            // 验证 mid 和 password 的匹配
-            if (auth.getMid() > 0 && auth.getPassword() != null && !auth.getPassword().isEmpty()) {
-                String sql = "SELECT COUNT(*) FROM Users WHERE mid = ? AND password = ?";
-                try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-                    pstmt.setLong(1, auth.getMid());
-                    pstmt.setString(2, auth.getPassword());
-                    ResultSet rs = pstmt.executeQuery();
-                    if (rs.next() && rs.getInt(1) == 1) {
-                        // 如果mid和password匹配，验证通过
-                        return true;
-                    }
-                }
-            }
+        String sql = "SELECT password, qq, wechat FROM Users WHERE mid = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
-            // 验证 QQ 或 WeChat 是否有效
-            if ((auth.getQq() != null && !auth.getQq().isEmpty()) || (auth.getWechat() != null && !auth.getWechat().isEmpty())) {
-                String sql = "SELECT COUNT(*) FROM Users WHERE qq = ? OR wechat = ?";
-                try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-                    pstmt.setString(1, auth.getQq() == null ? "" : auth.getQq());
-                    pstmt.setString(2, auth.getWechat() == null ? "" : auth.getWechat());
-                    ResultSet rs = pstmt.executeQuery();
-                    if (rs.next() && rs.getInt(1) >= 1) {
-                        // 如果QQ或微信至少有一个有效，验证通过
-                        return true;
-                    }
+            pstmt.setLong(1, auth.getMid());
+            ResultSet rs = pstmt.executeQuery();
+
+            if (rs.next()) {
+                String storedPassword = rs.getString("password");
+
+                // 检查密码是否匹配
+                boolean isPasswordValid = auth.getPassword() != null && auth.getPassword().equals(storedPassword);
+                if (!isPasswordValid) {
+                    return false;
                 }
+
+                String storedQQ = rs.getString("qq");
+                String storedWechat = rs.getString("wechat");
+
+                boolean isQQValid = auth.getQq() == null || auth.getQq().equals(storedQQ);
+                boolean isWechatValid = auth.getWechat() == null || auth.getWechat().equals(storedWechat);
+
+                return isQQValid && isWechatValid;
+            } else {
+                // mid不存在，检查qq和wechat
+                return checkQQWechat(auth);
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        return false; // 如果上述情况都不满足，验证失败
+        return false;
+    }
+
+    private boolean checkQQWechat(AuthInfo auth) {
+        if (auth.getQq() != null && auth.getWechat() != null) {
+            // 检查是否存在一个用户同时拥有这个qq和wechat
+            return checkUserWithBoth(auth.getQq(), auth.getWechat());
+        } else if (auth.getQq() != null) {
+            // 检查是否存在拥有这个qq的用户
+            return checkUserWithQQ(auth.getQq());
+        } else if (auth.getWechat() != null) {
+            // 检查是否存在拥有这个wechat的用户
+            return checkUserWithWechat(auth.getWechat());
+        }
+        return false;
+    }
+
+    // 实现 checkUserWithQQ, checkUserWithWechat, checkUserWithBoth 方法来检查数据库
+    private boolean checkUserWithQQ(String qq) {
+        String sql = "SELECT COUNT(*) FROM Users WHERE qq = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setString(1, qq);
+            ResultSet rs = pstmt.executeQuery();
+
+            if (rs.next()) {
+                return rs.getInt(1) > 0;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    private boolean checkUserWithWechat(String wechat) {
+        String sql = "SELECT COUNT(*) FROM Users WHERE wechat = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setString(1, wechat);
+            ResultSet rs = pstmt.executeQuery();
+
+            if (rs.next()) {
+                return rs.getInt(1) > 0;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    private boolean checkUserWithBoth(String qq, String wechat) {
+        String sql = "SELECT COUNT(*) FROM Users WHERE qq = ? AND wechat = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setString(1, qq);
+            pstmt.setString(2, wechat);
+            ResultSet rs = pstmt.executeQuery();
+
+            if (rs.next()) {
+                return rs.getInt(1) > 0;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
     }
 
 
