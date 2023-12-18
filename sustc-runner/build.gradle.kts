@@ -10,8 +10,8 @@ plugins {
 
 dependencies {
     implementation(
-        fileTree("$rootDir/submit").matching { include("*.jar") }
-            .takeIf { !it.isEmpty } ?: project(":sustc-api")
+            fileTree("$rootDir/submit").matching { include("*.jar") }
+                    .takeIf { !it.isEmpty } ?: project(":sustc-api")
     )
     runtimeOnly("org.postgresql:postgresql")
     implementation("com.opencsv:opencsv:5.8")
@@ -32,8 +32,8 @@ tasks.register("benchmark") {
     description = "Run the benchmark script"
 
     tasks.getByName<BootRun>("bootRun")
-        .apply { args("--spring.profiles.active=benchmark") }
-        .let { finalizedBy(it) }
+            .apply { args("--spring.profiles.active=benchmark") }
+            .let { finalizedBy(it) }
 }
 
 tasks.withType<BootJar> {
