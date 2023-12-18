@@ -59,7 +59,7 @@ public class VideoServiceImpl {
             // 直接使用 req.getPublicTime()，无需转换
             pstmt.setTimestamp(6, req.getPublicTime()); // public_time
 
-            pstmt.setLong(7, req.getDuration());
+            pstmt.setLong(7, (long) req.getDuration());
             pstmt.setString(8, req.getDescription());
 
             int rowsAffected = pstmt.executeUpdate();
@@ -294,7 +294,7 @@ public class VideoServiceImpl {
             // 设置查询参数
             pstmt.setString(1, req.getTitle());
             pstmt.setTimestamp(2, req.getPublicTime());
-            pstmt.setLong(3, req.getDuration());
+            pstmt.setLong(3, (long) req.getDuration());
             pstmt.setString(4, req.getDescription());
             pstmt.setString(5, bv);
 
@@ -588,6 +588,8 @@ public class VideoServiceImpl {
         }
 
         // 检查当前用户是否为超级用户
+
+
         if (!isSuperuser(auth)) {
             return false;
         }

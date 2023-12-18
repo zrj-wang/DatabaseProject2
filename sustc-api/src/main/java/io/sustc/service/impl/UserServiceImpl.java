@@ -11,6 +11,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -94,32 +95,70 @@ public class UserServiceImpl {
         return false; // 如果查询不到结果或发生异常，则假定不存在重复用户
     }
     private long addNewUser(RegisterUserReq req) {
+        // 首先生成一个唯一的 mid
+        long mid = generateUniqueMid();
+
         // SQL 插入语句
-        String sql = "INSERT INTO Users (name, sex, birthday, sign, password, qq, wechat) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING mid";
+        String sql = "INSERT INTO Users (mid, name, sex, birthday, sign, password, qq, wechat) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             // 设置 SQL 参数
-            pstmt.setString(1, req.getName());
-            pstmt.setString(2, convertGender(req.getSex())); // 转换 Gender 枚举为数据库中的字符串
-            pstmt.setString(3, req.getBirthday());
-            pstmt.setString(4, req.getSign());
-            pstmt.setString(5, req.getPassword());
-            pstmt.setString(6, req.getQq());
-            pstmt.setString(7, req.getWechat());
+            pstmt.setLong(1, mid);
+            pstmt.setString(2, req.getName());
+            pstmt.setString(3, convertGender(req.getSex()));
+            pstmt.setString(4, req.getBirthday());
+            pstmt.setString(5, req.getSign());
+            pstmt.setString(6, req.getPassword());
+            pstmt.setString(7, req.getQq());
+            pstmt.setString(8, req.getWechat());
 
             // 执行 SQL 语句
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                // 返回新创建的用户 ID
-                return rs.getLong("mid");
+            int affectedRows = pstmt.executeUpdate();
+            if (affectedRows > 0) {
+                return mid; // 成功插入后返回生成的 mid
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
         return -1; // 如果发生错误或无法创建用户，则返回 -1
+    }
+
+
+    private long generateUniqueMid() {
+        long mid;
+        Random random = new Random();
+        do {
+            // 生成随机的 long 类型的 mid
+            mid = random.nextLong();
+
+            // 确保 mid 是正数
+            if (mid < 0) {
+                mid = -mid;
+            }
+
+            // 检查生成的 mid 是否重复
+        } while (isMidExist(mid));
+
+        return mid;
+    }
+    private boolean isMidExist(long mid) {
+        String sql = "SELECT COUNT(*) FROM Users WHERE mid = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setLong(1, mid);
+
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return rs.getInt(1) > 0; // 如果计数大于0，表示存在重复的 mid
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
     }
     // 将 Gender 枚举转换为对应的数据库字符串
     private String convertGender(RegisterUserReq.Gender gender) {
