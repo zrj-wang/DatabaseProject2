@@ -1,11 +1,10 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/postgres
-    username: postgres
-    password:
+    url: jdbc:postgresql://localhost:5432/sustc # change this to your own jdbc url
+    username: postgres  # change this to your own username (avoid using a superuser)
+    password:   # change this to your own password
     hikari:
-      auto-commit: false;
-
+      auto-commit: false
 ---
 
 benchmark:
