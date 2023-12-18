@@ -40,7 +40,9 @@ public class DatabaseServiceImpl implements DatabaseService {
 
     @Override
     public List<Integer> getGroupMembers() {
+
          return Arrays.asList(12210401, 12210403);
+
     }
 
 
@@ -59,6 +61,7 @@ public class DatabaseServiceImpl implements DatabaseService {
             List<UserRecord> userRecords,
             List<VideoRecord> videoRecords
     ) {
+
         Connection conn = null;
         try {
             conn= dataSource.getConnection();
@@ -255,6 +258,11 @@ public class DatabaseServiceImpl implements DatabaseService {
                 }
             }
         }
+
+        // TODO: implement your import logic
+        System.out.println(danmuRecords.size());
+        System.out.println(userRecords.size());
+        System.out.println(videoRecords.size());
     }
 
 
