@@ -17,7 +17,7 @@ import io.sustc.service.VideoService;
 
 
 //jz-gong
-public class VideoServiceImpl {
+public class VideoServiceImpl implements VideoService{
     @Autowired
     private DataSource dataSource;
 
