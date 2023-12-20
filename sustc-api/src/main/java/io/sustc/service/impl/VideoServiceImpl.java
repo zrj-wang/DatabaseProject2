@@ -35,14 +35,19 @@ public class VideoServiceImpl {
             return null;
         }
 
+        String bv;
+        do {
+            bv = generateBV();
+        } while (isBVExist(bv)); // 重复生成BV直到找到一个独一无二的值
+
         // 实现视频发布的逻辑
-        String bv = generateBV();
         if (insertVideoInfo(auth.getMid(), bv, req)) {
             return bv;
         } else {
             return null;
         }
     }
+
 
     // 将视频信息插入数据库
     private boolean insertVideoInfo(long mid, String bv, PostVideoReq req) {
@@ -202,6 +207,22 @@ public class VideoServiceImpl {
         String uuid = UUID.randomUUID().toString().substring(0, 8); // 获取UUID的前8个字符
         return "BV" + timestamp + uuid;
     }
+    private boolean isBVExist(String bv) {
+        String sql = "SELECT COUNT(*) FROM videos WHERE BV = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setString(1, bv);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next() && rs.getInt(1) > 0) {
+                return true; // 如果找到相同的BV，返回 true
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false; // 如果没有找到相同的BV或发生异常，返回 false
+    }
+
 
     public boolean deleteVideo(AuthInfo auth, String bv) {
         // 验证 auth 是否有效
