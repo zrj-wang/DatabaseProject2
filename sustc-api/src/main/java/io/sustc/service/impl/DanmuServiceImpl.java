@@ -1,10 +1,8 @@
 package io.sustc.service.impl;
 import io.sustc.dto.AuthInfo;
-import io.sustc.dto.DanmuRecord;
-import io.sustc.dto.UserRecord;
-import io.sustc.dto.VideoRecord;
+
 import io.sustc.service.DanmuService;
-import io.sustc.service.DatabaseService;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -12,7 +10,7 @@ import org.springframework.stereotype.Service;
 import javax.sql.DataSource;
 import java.sql.*;
 import java.util.ArrayList;
-import java.util.Arrays;
+
 import java.util.List;
 //zrj-wang
 
@@ -26,38 +24,119 @@ public class DanmuServiceImpl implements DanmuService {
 
     
 
-    @Override
-    public long sendDanmu(AuthInfo auth, String bv, String content, float time) {
-        if (auth == null || !isValidAuth(auth)) {
-            return -1;
-        }
-
-        if (bv == null || !videoExists(bv)) {
-            return -1;
-        }
-
-        if (content == null || content.trim().isEmpty()) {
-            return -1;
-        }
-
-        if (!isVideoPublished(bv)) {
-            return -1;
-        }
-
-        if (!hasWatchedVideo(auth.getMid(), bv)) {
-            return -1;
-        }
-
-        return insertDanmu(bv, auth.getMid(), content, time);
+//    @Override
+//    public long sendDanmu(AuthInfo auth, String bv, String content, float time) {
+//        if (auth == null || !isValidAuth(auth)) {
+//            return -1;
+//        }
+//
+//        if (bv == null || !videoExists(bv)) {
+//            return -1;
+//        }
+//
+//        if (content == null || content.trim().isEmpty()) {
+//            return -1;
+//        }
+//
+//        if (!isVideoPublished(bv)) {
+//            return -1;
+//        }
+//
+//        if (!hasWatchedVideo(auth.getMid(), bv)) {
+//            return -1;
+//        }
+//
+//        return insertDanmu(bv, auth.getMid(), content, time);
+//    }
+@Override
+public long sendDanmu(AuthInfo auth, String bv, String content, float time) {
+    if (auth == null || !isValidAuth(auth)) {
+        return -1;
     }
 
-    //检查用户认证信息是否有效
-    private boolean isValidAuth(AuthInfo auth) {
-        // 确保至少提供了一个认证信息
-        if (auth.getPassword() == null && auth.getQq() == null && auth.getWechat() == null) {
-            return false;
-        }
+    if (content == null || content.trim().isEmpty()) {
+        return -1;
+    }
 
+    // 使用新的checkVideoStatus方法替换原有的独立检查
+    if (!checkVideoStatus(bv, auth.getMid())) {
+        return -1;
+    }
+
+    return insertDanmu(bv, auth.getMid(), content, time);
+}
+
+//    //检查用户认证信息是否有效
+//    private boolean isValidAuth(AuthInfo auth) {
+//        // 确保至少提供了一个认证信息
+//        if (auth.getPassword() == null && auth.getQq() == null && auth.getWechat() == null) {
+//            return false;
+//        }
+//
+//        String sql = "SELECT password, qq, wechat FROM Users WHERE mid = ?";
+//        try (Connection conn = dataSource.getConnection();
+//             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+//
+//            pstmt.setLong(1, auth.getMid());
+//            ResultSet rs = pstmt.executeQuery();
+//
+//            if (rs.next()) {
+//                String storedPassword = rs.getString("password");
+//
+//                // 检查密码是否匹配
+//                boolean isPasswordValid = auth.getPassword() != null && auth.getPassword().equals(storedPassword);
+//                if (!isPasswordValid) {
+//                    return false;
+//                }
+//
+//                String storedQQ = rs.getString("qq");
+//                String storedWechat = rs.getString("wechat");
+//
+//                boolean isQQValid = auth.getQq() == null || auth.getQq().equals(storedQQ);
+//                boolean isWechatValid = auth.getWechat() == null || auth.getWechat().equals(storedWechat);
+//
+//                return isQQValid && isWechatValid;
+//            } else {
+//                // mid不存在，检查qq和wechat
+//                return checkQQWechat(auth);
+//            }
+//        } catch (SQLException e) {
+//            e.printStackTrace();
+//        }
+//        return false;
+//    }
+// 示例：优化sendDanmu方法的条件检查
+    private boolean checkVideoStatus(String bv, long mid) {
+        // 合并查询视频状态和用户是否观看过该视频
+        String sql = "SELECT v.BV, v.public_time, v.review_time " +
+                "FROM videos v " +
+                "WHERE v.BV = ? AND EXISTS (" +
+                "    SELECT 1 FROM watched_relation w " +
+                "    WHERE w.user_watched_Mid = ? AND w.video_watched_BV = v.BV" +
+                ")";
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setString(1, bv);
+            pstmt.setLong(2, mid);
+            ResultSet rs = pstmt.executeQuery();
+
+            if (rs.next()) {
+                Timestamp publicTime = rs.getTimestamp("public_time");
+                Timestamp reviewTime = rs.getTimestamp("review_time");
+
+                // 检查视频是否已发布（public_time存在且在review_time之后）
+                return publicTime != null && (reviewTime == null || publicTime.after(reviewTime));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    // 示例：优化isValidAuth方法
+    private boolean isValidAuth(AuthInfo auth) {
         String sql = "SELECT password, qq, wechat FROM Users WHERE mid = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -66,29 +145,27 @@ public class DanmuServiceImpl implements DanmuService {
             ResultSet rs = pstmt.executeQuery();
 
             if (rs.next()) {
-                String storedPassword = rs.getString("password");
-
-                // 检查密码是否匹配
-                boolean isPasswordValid = auth.getPassword() != null && auth.getPassword().equals(storedPassword);
-                if (!isPasswordValid) {
-                    return false;
-                }
-
-                String storedQQ = rs.getString("qq");
-                String storedWechat = rs.getString("wechat");
-
-                boolean isQQValid = auth.getQq() == null || auth.getQq().equals(storedQQ);
-                boolean isWechatValid = auth.getWechat() == null || auth.getWechat().equals(storedWechat);
-
-                return isQQValid && isWechatValid;
+                return checkAuthInfo(rs, auth);
             } else {
-                // mid不存在，检查qq和wechat
+                // 如果没有使用mid找到用户，则检查qq和wechat
                 return checkQQWechat(auth);
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
         return false;
+    }
+    private boolean checkAuthInfo(ResultSet rs, AuthInfo auth) throws SQLException {
+        String storedPassword = rs.getString("password");
+        String storedQQ = rs.getString("qq");
+        String storedWechat = rs.getString("wechat");
+
+        // 检查密码、QQ和微信是否有效
+        boolean isPasswordValid = auth.getPassword() != null && auth.getPassword().equals(storedPassword);
+        boolean isQQValid = auth.getQq() == null || auth.getQq().equals(storedQQ);
+        boolean isWechatValid = auth.getWechat() == null || auth.getWechat().equals(storedWechat);
+
+        return isPasswordValid && isQQValid && isWechatValid;
     }
 
     private boolean checkQQWechat(AuthInfo auth) {
@@ -181,22 +258,22 @@ private boolean checkUserWithQQ(String qq) {
         return false;
     }
 
-    private boolean hasWatchedVideo(long mid, String bv) {
-        String sql = "SELECT COUNT(*) FROM watched_relation WHERE user_watched_Mid = ? AND video_view_BV = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
-            pstmt.setLong(1, mid);
-            pstmt.setString(2, bv);
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                return rs.getInt(1) > 0;
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return false;
-    }
+//    private boolean hasWatchedVideo(long mid, String bv) {
+//        String sql = "SELECT COUNT(*) FROM watched_relation WHERE user_watched_Mid = ? AND video_view_BV = ?";
+//        try (Connection conn = dataSource.getConnection();
+//             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+//
+//            pstmt.setLong(1, mid);
+//            pstmt.setString(2, bv);
+//            ResultSet rs = pstmt.executeQuery();
+//            if (rs.next()) {
+//                return rs.getInt(1) > 0;
+//            }
+//        } catch (SQLException e) {
+//            e.printStackTrace();
+//        }
+//        return false;
+//    }
 
     private boolean isVideoPublished(String bv) {
         String sql = "SELECT public_time, review_time FROM videos WHERE BV = ?";
