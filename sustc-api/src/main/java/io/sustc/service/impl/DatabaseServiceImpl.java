@@ -128,9 +128,8 @@ public class DatabaseServiceImpl implements DatabaseService {
 //                userPstmt.executeBatch(); // 执行剩余的批处理
 //                followingPstmt.executeBatch(); // 执行剩余的批处理
 //
-//前两个导入没问题
-
-
+//
+//
 //                int count2 = 0;
 //                for (VideoRecord video : videoRecords) {
 //                    // 插入视频记录
@@ -192,15 +191,15 @@ public class DatabaseServiceImpl implements DatabaseService {
 //                coinPstmt.executeBatch();
 //                favoritePstmt.executeBatch();
 //                viewPstmt.executeBatch();
-
-//再试试，感觉没问题
+//
+////ok
 
 
                 //还没有解决导入不了likeby的问题
                 int count3 = 0;
 
-// 创建一个列表用于存储生成的自增主键
-                List<Integer> danmuIds = new ArrayList<>();
+                // 创建一个列表用于存储生成的自增主键
+                ArrayList<Integer> danmuIds = new ArrayList<>();
 
                 for (DanmuRecord record : danmuRecords) {
                     // 插入danmu记录
