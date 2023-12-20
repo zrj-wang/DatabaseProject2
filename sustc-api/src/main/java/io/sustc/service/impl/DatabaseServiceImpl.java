@@ -90,116 +90,113 @@ public class DatabaseServiceImpl implements DatabaseService {
                  PreparedStatement coinPstmt = conn.prepareStatement(coinSql);
                  PreparedStatement favoritePstmt = conn.prepareStatement(favoriteSql);
                  PreparedStatement viewPstmt = conn.prepareStatement(viewSql);
-                 PreparedStatement danmuPstmt = conn.prepareStatement(danmuSql);
+                 PreparedStatement danmuPstmt = conn.prepareStatement(danmuSql, PreparedStatement.RETURN_GENERATED_KEYS);
                  PreparedStatement likedPstmt1 = conn.prepareStatement(likbySql)) {
-//                int count = 0;
-//                for (UserRecord user : userRecords) {
-//                    // 插入用户记录
-//                    userPstmt.setLong(1, user.getMid());
-//                    userPstmt.setString(2, user.getName());
-//                    userPstmt.setString(3, user.getSex());
-//                    userPstmt.setString(4, user.getBirthday());
-//                    userPstmt.setShort(5, user.getLevel());
-//                    userPstmt.setInt(6, user.getCoin());
-//                    userPstmt.setString(7, user.getSign());
-//                    userPstmt.setString(8, user.getIdentity().name());
-//                    userPstmt.setString(9, user.getPassword());
-//                    userPstmt.setString(10, user.getQq());
-//                    userPstmt.setString(11, user.getWechat());
-//
-//                    userPstmt.addBatch(); // 添加到批处理
-//
-//
-//                    if (++count % 500 == 0) {
-//                        userPstmt.executeBatch();
+                int count = 0;
+                for (UserRecord user : userRecords) {
+                    // 插入用户记录
+                    userPstmt.setLong(1, user.getMid());
+                    userPstmt.setString(2, user.getName());
+                    userPstmt.setString(3, user.getSex());
+                    userPstmt.setString(4, user.getBirthday());
+                    userPstmt.setShort(5, user.getLevel());
+                    userPstmt.setInt(6, user.getCoin());
+                    userPstmt.setString(7, user.getSign());
+                    userPstmt.setString(8, user.getIdentity().name());
+                    userPstmt.setString(9, user.getPassword());
+                    userPstmt.setString(10, user.getQq());
+                    userPstmt.setString(11, user.getWechat());
+
+                    userPstmt.addBatch(); // 添加到批处理
+
+
+                    if (++count % 500 == 0) {
+                        userPstmt.executeBatch();
+                    }
+                }
+
+                for (UserRecord user : userRecords) {
+                    for (long followMid : user.getFollowing()) {
+                        followingPstmt.setLong(1, user.getMid());
+                        followingPstmt.setLong(2, followMid);
+                        followingPstmt.addBatch();
+                    }
+                    if (++count % 500 == 0) {
+                        followingPstmt.executeBatch();
+                    }
+                }
+                userPstmt.executeBatch(); // 执行剩余的批处理
+                followingPstmt.executeBatch(); // 执行剩余的批处理
+
+
+
+                int count2 = 0;
+                for (VideoRecord video : videoRecords) {
+                    // 插入视频记录
+                    videoPstmt.setString(1, video.getBv());
+                    videoPstmt.setString(2, video.getTitle());
+                    videoPstmt.setLong(3, video.getOwnerMid());
+                    videoPstmt.setTimestamp(4, video.getCommitTime());
+                    videoPstmt.setTimestamp(5, video.getReviewTime());
+                    videoPstmt.setTimestamp(6, video.getPublicTime());
+                    videoPstmt.setFloat(7, video.getDuration());
+                    videoPstmt.setString(8, video.getDescription());
+                    videoPstmt.setLong(9, video.getReviewer());
+
+                    videoPstmt.addBatch(); // 添加到批处理
+
+
+                    // 插入喜欢视频的用户关系
+                    for (long likeMid : video.getLike()) {
+                        likedPstmt.setString(1, video.getBv());
+                        likedPstmt.setLong(2, likeMid);
+                        likedPstmt.addBatch();
+                    }
+
+                    // 插入投币用户的关系
+                    for (long coinMid : video.getCoin()) {
+                        coinPstmt.setString(1, video.getBv());
+                        coinPstmt.setLong(2, coinMid);
+                        coinPstmt.addBatch();
+                    }
+
+                    // 插入收藏视频的用户关系
+                    for (long favoriteMid : video.getFavorite()) {
+                        favoritePstmt.setString(1, video.getBv());
+                        favoritePstmt.setLong(2, favoriteMid);
+                        favoritePstmt.addBatch();
+                    }
+
+                    // 插入观看视频的用户关系
+//                    if (video.getViewerMids().length>0 && video.getViewTime().length>0) {
+                        for (int i = 0; i < video.getViewerMids().length; i++) {
+                            viewPstmt.setString(1, video.getBv());
+                            viewPstmt.setLong(2, video.getViewerMids()[i]);
+                            viewPstmt.setFloat(3, video.getViewTime()[i]);
+                            viewPstmt.addBatch();
+                        }
 //                    }
-//                }
-//
-//                for (UserRecord user : userRecords) {
-//                    for (long followMid : user.getFollowing()) {
-//                        followingPstmt.setLong(1, user.getMid());
-//                        followingPstmt.setLong(2, followMid);
-//                        followingPstmt.addBatch();
-//                    }
-//                    if (++count % 500 == 0) {
-//                        followingPstmt.executeBatch();
-//                    }
-//                }
-//                userPstmt.executeBatch(); // 执行剩余的批处理
-//                followingPstmt.executeBatch(); // 执行剩余的批处理
-//
-//
-//
-//                int count2 = 0;
-//                for (VideoRecord video : videoRecords) {
-//                    // 插入视频记录
-//                    videoPstmt.setString(1, video.getBv());
-//                    videoPstmt.setString(2, video.getTitle());
-//                    videoPstmt.setLong(3, video.getOwnerMid());
-//                    videoPstmt.setTimestamp(4, video.getCommitTime());
-//                    videoPstmt.setTimestamp(5, video.getReviewTime());
-//                    videoPstmt.setTimestamp(6, video.getPublicTime());
-//                    videoPstmt.setFloat(7, video.getDuration());
-//                    videoPstmt.setString(8, video.getDescription());
-//                    videoPstmt.setLong(9, video.getReviewer());
-//
-//                    videoPstmt.addBatch(); // 添加到批处理
-//
-//
-//                    // 插入喜欢视频的用户关系
-//                    for (long likeMid : video.getLike()) {
-//                        likedPstmt.setString(1, video.getBv());
-//                        likedPstmt.setLong(2, likeMid);
-//                        likedPstmt.addBatch();
-//                    }
-//
-//                    // 插入投币用户的关系
-//                    for (long coinMid : video.getCoin()) {
-//                        coinPstmt.setString(1, video.getBv());
-//                        coinPstmt.setLong(2, coinMid);
-//                        coinPstmt.addBatch();
-//                    }
-//
-//                    // 插入收藏视频的用户关系
-//                    for (long favoriteMid : video.getFavorite()) {
-//                        favoritePstmt.setString(1, video.getBv());
-//                        favoritePstmt.setLong(2, favoriteMid);
-//                        favoritePstmt.addBatch();
-//                    }
-//
-//                    // 插入观看视频的用户关系
-////                    if (video.getViewerMids().length>0 && video.getViewTime().length>0) {
-//                        for (int i = 0; i < video.getViewerMids().length; i++) {
-//                            viewPstmt.setString(1, video.getBv());
-//                            viewPstmt.setLong(2, video.getViewerMids()[i]);
-//                            viewPstmt.setFloat(3, video.getViewTime()[i]);
-//                            viewPstmt.addBatch();
-//                        }
-////                    }
-//
-//                    if (++count2 % 500 == 0) {
-//                        videoPstmt.executeBatch(); // 每500条执行一次批处理
-//                        likedPstmt.executeBatch();
-//                        coinPstmt.executeBatch();
-//                        favoritePstmt.executeBatch();
-//                        viewPstmt.executeBatch();
-//                    }
-//                }
-//
-//                videoPstmt.executeBatch(); // 执行剩余的批处理
-//                likedPstmt.executeBatch();
-//                coinPstmt.executeBatch();
-//                favoritePstmt.executeBatch();
-//                viewPstmt.executeBatch();
-//
-////ok
+
+                    if (++count2 % 500 == 0) {
+                        videoPstmt.executeBatch(); // 每500条执行一次批处理
+                        likedPstmt.executeBatch();
+                        coinPstmt.executeBatch();
+                        favoritePstmt.executeBatch();
+                        viewPstmt.executeBatch();
+                    }
+                }
+
+                videoPstmt.executeBatch(); // 执行剩余的批处理
+                likedPstmt.executeBatch();
+                coinPstmt.executeBatch();
+                favoritePstmt.executeBatch();
+                viewPstmt.executeBatch();
+
+//ok
 
 
                 //还没有解决导入不了likeby的问题
                 int count3 = 0;
-
-                // 创建一个列表用于存储生成的自增主键
-                ArrayList<Integer> danmuIds = new ArrayList<>();
 
                 for (DanmuRecord record : danmuRecords) {
                     // 插入danmu记录
@@ -208,39 +205,18 @@ public class DatabaseServiceImpl implements DatabaseService {
                     danmuPstmt.setFloat(3, record.getTime());
                     danmuPstmt.setString(4, record.getContent());
                     danmuPstmt.setTimestamp(5, record.getPostTime());
-                    danmuPstmt.addBatch();
-
-                    if (++count3 % 500 == 0) {
-                        danmuPstmt.executeBatch(); // 每500条执行一次danmuPstmt的批处理
-                    }
-
-                    // 将获取的自增主键添加到列表
+                    danmuPstmt.executeUpdate();
                     ResultSet generatedKeys = danmuPstmt.getGeneratedKeys();
-                    if (generatedKeys.next()) {
+                    while (generatedKeys.next()) {
                         int danmuId = generatedKeys.getInt(1);
-                        danmuIds.add(danmuId);
+                        for (long userMid : record.getLikedBy()) {
+                            likedPstmt1.setInt(1, danmuId);
+                            likedPstmt1.setLong(2, userMid);
+                            likedPstmt1.executeUpdate();
+                        }
                     }
                 }
 
-// 执行剩余的批处理
-                danmuPstmt.executeBatch();
-
-// 插入danmu_like记录
-                int count4 = 0;
-                for (int danmuId : danmuIds) {
-                    for (long userMid : danmuRecords.get(count4).getLikedBy()) {
-                        likedPstmt1.setInt(1, danmuId);
-                        likedPstmt1.setLong(2, userMid);
-                        likedPstmt1.addBatch();
-                    }
-
-                    if (++count4 % 500 == 0) {
-                        likedPstmt1.executeBatch(); // 每500条执行一次likedPstmt1的批处理
-                    }
-                }
-
-// 执行剩余的likedPstmt1的批处理
-                likedPstmt1.executeBatch();
 
             }
             conn.commit(); // 在这里提交事务
