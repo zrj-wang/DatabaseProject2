@@ -24,8 +24,6 @@ public class DanmuServiceImpl implements DanmuService {
     private DataSource dataSource;
 
 
-    
-
     @Override
     public long sendDanmu(AuthInfo auth, String bv, String content, float time) {
         if (auth == null || !isValidAuth(auth)) {

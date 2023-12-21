@@ -39,11 +39,10 @@ public class DatabaseServiceImpl implements DatabaseService {
     @Autowired
     private DataSource dataSource;
 
+
     @Override
     public List<Integer> getGroupMembers() {
-
          return Arrays.asList(12210401, 12210403);
-
     }
 
 
@@ -114,6 +113,7 @@ public class DatabaseServiceImpl implements DatabaseService {
                         userPstmt.executeBatch();
                     }
                 }
+                userPstmt.executeBatch(); // 执行剩余的批处理
 
                 for (UserRecord user : userRecords) {
                     for (long followMid : user.getFollowing()) {
@@ -125,7 +125,7 @@ public class DatabaseServiceImpl implements DatabaseService {
                         followingPstmt.executeBatch();
                     }
                 }
-                userPstmt.executeBatch(); // 执行剩余的批处理
+
                 followingPstmt.executeBatch(); // 执行剩余的批处理
 
 

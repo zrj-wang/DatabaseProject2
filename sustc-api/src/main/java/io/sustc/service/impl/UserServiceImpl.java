@@ -3,7 +3,10 @@ package io.sustc.service.impl;
 import io.sustc.dto.AuthInfo;
 import io.sustc.dto.RegisterUserReq;
 import io.sustc.dto.UserInfoResp;
+import io.sustc.service.UserService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
@@ -15,9 +18,10 @@ import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-
 //jz-gong
-public class UserServiceImpl {
+@Service
+@Slf4j
+public class UserServiceImpl implements UserService {
     @Autowired
     private DataSource dataSource;
     public long register(RegisterUserReq req){
