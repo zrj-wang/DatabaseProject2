@@ -179,6 +179,9 @@ public class UserServiceImpl implements UserService {
         }
     }
     public boolean deleteAccount(AuthInfo auth, long mid) {
+        if (auth == null || mid <= 0) {
+            return false;
+        }
         try (Connection conn = dataSource.getConnection()) {
             // 验证 auth 是否有效
             if (!isValidAuth(auth)) {

@@ -24,7 +24,8 @@ public class DanmuServiceImpl implements DanmuService {
 
     @Override
     public long sendDanmu(AuthInfo auth, String bv, String content, float time) {
-        long startTime = System.nanoTime(); // 开始计时
+
+
         if (auth == null || !isValidAuth(auth)) {
             return -1;
         }
@@ -44,21 +45,14 @@ public class DanmuServiceImpl implements DanmuService {
         if (!hasWatchedVideo(auth.getMid(), bv)) {
             return -1;
         }
-        long endTime = System.nanoTime(); // 结束计时
-        long duration = endTime - startTime; // 计算持续时间
 
-        log.info("sendDanmu:" + duration+"ns" );
 
         return insertDanmu(bv, auth.getMid(), content, time);
     }
 
     //检查用户认证信息是否有效
     private boolean isValidAuth(AuthInfo auth) {
-        long startTime = System.nanoTime(); // 开始计时
-        // 确保至少提供了一个认证信息
-        if (auth.getPassword() == null && auth.getQq() == null && auth.getWechat() == null) {
-            return false;
-        }
+
 
         String sql = "SELECT password, qq, wechat FROM Users WHERE mid = ?";
         try (Connection conn = dataSource.getConnection();
@@ -90,9 +84,7 @@ public class DanmuServiceImpl implements DanmuService {
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        long endTime = System.nanoTime(); // 结束计时
-        long duration = endTime - startTime; // 计算持续时间
-        log.info("isValidAuth:" + duration+"ns" );
+
         return false;
     }
 
@@ -180,7 +172,7 @@ private boolean checkUserWithQQ(String qq) {
 
 
     private boolean videoExists(String bv) {
-        long startTime = System.nanoTime(); // 开始计时
+
         // 直接检查bv是否为空，避免不必要的数据库操作
         if (bv == null || bv.trim().isEmpty()) {
             return false;
@@ -197,14 +189,12 @@ private boolean checkUserWithQQ(String qq) {
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        long endTime = System.nanoTime(); // 结束计时
-        long duration = endTime - startTime; // 计算持续时间
-        log.info("videoExists:" + duration+"ns" );
+
         return false;
     }
 
     private boolean hasWatchedVideo(long mid, String bv) {
-        long startTime = System.nanoTime(); // 开始计时
+
         // 检查参数是否有效
         if (mid <= 0 || bv == null || bv.trim().isEmpty()) {
             return false;
@@ -222,14 +212,12 @@ private boolean checkUserWithQQ(String qq) {
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        long endTime = System.nanoTime(); // 结束计时
-        long duration = endTime - startTime; // 计算持续时间
-        log.info("hasWatchedVideo:" + duration+"ns" );
+
         return false;
     }
 
     private boolean isVideoPublished(String bv) {
-        long startTime = System.nanoTime(); // 开始计时
+
         // 检查bv是否有效
         if (bv == null || bv.trim().isEmpty()) {
             return false;
@@ -250,9 +238,7 @@ private boolean checkUserWithQQ(String qq) {
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        long endTime = System.nanoTime(); // 结束计时
-        long duration = endTime - startTime; // 计算持续时间
-        log.info("isVideoPublished:" + duration+"ns" );
+
         return false;
     }
 
@@ -260,7 +246,7 @@ private boolean checkUserWithQQ(String qq) {
 
 
     private long insertDanmu(String bv, long mid, String content, float time) {
-        long startTime = System.nanoTime(); // 开始计时
+
         // 参数有效性检查
         if (bv == null || bv.trim().isEmpty() || mid <= 0 || content == null || content.trim().isEmpty()) {
             return -1;
@@ -289,9 +275,7 @@ private boolean checkUserWithQQ(String qq) {
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        long endTime = System.nanoTime(); // 结束计时
-        long duration = endTime - startTime; // 计算持续时间
-        log.info("insertDanmu:" + duration+"ns" );
+
         return -1;
     }
 
@@ -304,7 +288,7 @@ private boolean checkUserWithQQ(String qq) {
 
     @Override
     public List<Long> displayDanmu(String bv, float timeStart, float timeEnd, boolean filter) {
-        long startTime = System.nanoTime(); // 开始计时
+
         if (bv == null || bv.trim().isEmpty() || timeStart < 0 || timeEnd < 0 || timeStart > timeEnd) {
             return null;
         }
@@ -331,9 +315,7 @@ private boolean checkUserWithQQ(String qq) {
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        long endTime = System.nanoTime(); // 结束计时
-        long duration = endTime - startTime; // 计算持续时间
-        log.info("displayDanmu:" + duration+"ns" );
+
         return null;
     }
 
@@ -373,7 +355,7 @@ private boolean checkUserWithQQ(String qq) {
 
     @Override
     public boolean likeDanmu(AuthInfo auth, long id) {
-    long startTime = System.nanoTime(); // 开始计时
+
         if (auth == null || id <= 0) {
             return false;
         }
@@ -407,9 +389,7 @@ private boolean checkUserWithQQ(String qq) {
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        long endTime = System.nanoTime(); // 结束计时
-        long duration = endTime - startTime; // 计算持续时间
-        log.info("likeDanmu:" + duration+"ns" );
+
         return false;
     }
 
