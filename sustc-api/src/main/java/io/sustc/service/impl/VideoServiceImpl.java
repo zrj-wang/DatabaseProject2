@@ -464,7 +464,7 @@ public class VideoServiceImpl implements VideoService{
             return future.get();
         } catch (InterruptedException | ExecutionException e) {
             // 异常处理
-            log.error("Error occurred when likeDanmu", e);
+            log.error("Error occurred when searchVideo", e);
             Thread.currentThread().interrupt(); // 重置中断状态
             return null;
         }
