@@ -14,9 +14,8 @@ import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
+
 @Service
 @Slf4j
 public class RecommenderServiceImpl implements RecommenderService {
@@ -57,9 +56,10 @@ public class RecommenderServiceImpl implements RecommenderService {
                 recommendedVideos.add(recommendedBV);
             }
 
-        } catch (SQLException e) {
+        }catch (SQLException e) {
             e.printStackTrace();
         }
+
 
         return recommendedVideos;
     }
@@ -85,7 +85,7 @@ public class RecommenderServiceImpl implements RecommenderService {
 
 
 
-
+//done
     @Override
     public List<String> generalRecommendations(int pageSize, int pageNum) {
         // 检查分页参数的有效性
@@ -94,16 +94,21 @@ public class RecommenderServiceImpl implements RecommenderService {
         }
 
         List<String> recommendedVideos = new ArrayList<>();
-        String sql = "SELECT v.BV, " +
-                "LEAST(COALESCE(like_rate, 0), 1) + LEAST(COALESCE(coin_rate, 0), 1) + LEAST(COALESCE(fav_rate, 0), 1) + COALESCE(danmu_avg, 0) + COALESCE(finish_avg, 0) AS score " +
-                "FROM videos v " +
-                "LEFT JOIN (SELECT video_like_BV, COUNT(*) / NULLIF((SELECT COUNT(*) FROM watched_relation WHERE video_watched_BV = video_like_BV), 0) as like_rate FROM liked_relation GROUP BY video_like_BV) lr ON v.BV = lr.video_like_BV " +
-                "LEFT JOIN (SELECT video_coin_BV, COUNT(*) / NULLIF((SELECT COUNT(*) FROM watched_relation WHERE video_watched_BV = video_coin_BV), 0) as coin_rate FROM coin_relation GROUP BY video_coin_BV) cr ON v.BV = cr.video_coin_BV " +
-                "LEFT JOIN (SELECT video_favorite_BV, COUNT(*) / NULLIF((SELECT COUNT(*) FROM watched_relation WHERE video_watched_BV = video_favorite_BV), 0) as fav_rate FROM favorite_relation GROUP BY video_favorite_BV) fr ON v.BV = fr.video_favorite_BV " +
-                "LEFT JOIN (SELECT danmu_BV, AVG(danmu_count) as danmu_avg FROM (SELECT danmu_BV, user_watched_Mid, COUNT(*) as danmu_count FROM danmu GROUP BY danmu_BV, user_watched_Mid) danmu_grouped GROUP BY danmu_BV) dr ON v.BV = dr.danmu_BV " +
-                "LEFT JOIN (SELECT video_watched_BV, AVG(watched_time / duration) as finish_avg FROM watched_relation wr JOIN videos vs ON wr.video_watched_BV = vs.BV GROUP BY video_watched_BV) wr ON v.BV = wr.video_watched_BV " +
-                "ORDER BY score DESC " +
-                "LIMIT ? OFFSET ?";
+        String sql = "SELECT v.BV, "
+                + "COALESCE(LEAST(like_rate, 1), 0) AS like_rate, "
+                + "COALESCE(LEAST(coin_rate, 1), 0) AS coin_rate, "
+                + "COALESCE(LEAST(fav_rate, 1), 0) AS fav_rate, "
+                + "COALESCE(danmu_avg, 0) AS danmu_avg, "
+                + "COALESCE(finish_avg, 0) AS finish_avg, "
+                + "(COALESCE(LEAST(like_rate, 1), 0) + COALESCE(LEAST(coin_rate, 1), 0) + COALESCE(LEAST(fav_rate, 1), 0) + COALESCE(danmu_avg, 0) + COALESCE(finish_avg, 0)) AS score "
+                + "FROM videos v "
+                + "LEFT JOIN (SELECT video_like_BV, COUNT(*) / NULLIF((SELECT COUNT(*) FROM watched_relation WHERE video_watched_BV = video_like_BV), 0) AS like_rate FROM liked_relation GROUP BY video_like_BV) lr ON v.BV = lr.video_like_BV "
+                + "LEFT JOIN (SELECT video_coin_BV, COUNT(*) / NULLIF((SELECT COUNT(*) FROM watched_relation WHERE video_watched_BV = video_coin_BV), 0) AS coin_rate FROM coin_relation GROUP BY video_coin_BV) cr ON v.BV = cr.video_coin_BV "
+                + "LEFT JOIN (SELECT video_favorite_BV, COUNT(*) / NULLIF((SELECT COUNT(*) FROM watched_relation WHERE video_watched_BV = video_favorite_BV), 0) AS fav_rate FROM favorite_relation GROUP BY video_favorite_BV) fr ON v.BV = fr.video_favorite_BV "
+                + "LEFT JOIN (SELECT danmu_BV, AVG(danmu_count) AS danmu_avg FROM (SELECT danmu_BV, COUNT(*) AS danmu_count FROM danmu GROUP BY danmu_BV) danmu_grouped GROUP BY danmu_BV) dr ON v.BV = dr.danmu_BV "
+                + "LEFT JOIN (SELECT video_watched_BV, AVG(watched_time / duration) AS finish_avg FROM watched_relation wr JOIN videos vs ON wr.video_watched_BV = vs.BV GROUP BY video_watched_BV) wr ON v.BV = wr.video_watched_BV "
+                + "ORDER BY score DESC "
+                + "LIMIT ? OFFSET ?";
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -120,7 +125,6 @@ public class RecommenderServiceImpl implements RecommenderService {
         } catch (SQLException e) {
             e.printStackTrace();
         }
-
         return recommendedVideos;
     }
 
@@ -328,10 +332,5 @@ public class RecommenderServiceImpl implements RecommenderService {
 
         return recommendedUserIds.isEmpty() ? new ArrayList<>() : recommendedUserIds;
     }
-
-
-
-
-
 
 }
