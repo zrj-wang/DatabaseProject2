@@ -363,7 +363,7 @@ private boolean checkUserWithQQ(String qq) {
             return future.get();
         } catch (InterruptedException | ExecutionException e) {
             // 异常处理
-            log.error("Error occurred while sending danmu", e);
+            log.error("Error occurred when displayDanmu", e);
             Thread.currentThread().interrupt(); // 重置中断状态
             return null;
         }
@@ -451,10 +451,10 @@ private boolean checkUserWithQQ(String qq) {
 
         try {
             // 等待异步执行完成并获取结果
-            return future.get();  // 注意：这会阻塞当前线程，直到异步操作完成
+            return future.get();
         } catch (InterruptedException | ExecutionException e) {
             // 异常处理
-            log.error("Error occurred while sending danmu", e);
+            log.error("Error occurred when likeDanmu", e);
             Thread.currentThread().interrupt(); // 重置中断状态
             return false;
         }
