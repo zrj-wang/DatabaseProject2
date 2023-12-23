@@ -4,6 +4,7 @@ import io.sustc.dto.PostVideoReq;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import javax.annotation.PostConstruct;
 import javax.sql.DataSource;
 import java.sql.*;
 import java.time.LocalDateTime;
@@ -11,6 +12,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import io.sustc.dto.VideoRecord;
 import io.sustc.service.UserService;
@@ -24,6 +29,12 @@ import org.springframework.stereotype.Service;
 public class VideoServiceImpl implements VideoService{
     @Autowired
     private DataSource dataSource;
+
+    private ExecutorService executorService;
+    @PostConstruct
+    public void init() {
+        executorService = Executors.newFixedThreadPool(10);
+    }
 
     public String postVideo(AuthInfo auth, PostVideoReq req) {
         // 验证 auth 是否有效
@@ -229,23 +240,40 @@ public class VideoServiceImpl implements VideoService{
 
 
     public boolean deleteVideo(AuthInfo auth, String bv) {
-        // 验证 auth 是否有效
-        if (!isValidAuth(auth)) {
+        Future<Boolean> future = executorService.submit(() -> {
+            // 验证 auth 是否有效
+            if (!isValidAuth(auth)) {
+                return false;
+            }
+
+            // 检查 bv 是否无效
+            if (bv == null || bv.isEmpty() || !videoExists(bv)) {
+                return false;
+            }
+
+            // 检查当前用户是否为视频的所有者或超级用户
+            if (!isOwner(auth, bv) && !isSuperuser(auth)) {
+                return false;
+            }
+
+            // 执行删除视频的操作
+            return performDeleteVideo(bv);
+
+
+        });
+
+        try {
+            // 等待异步执行完成并获取结果
+            return future.get();
+        } catch (InterruptedException | ExecutionException e) {
+            // 异常处理
+            log.error("Error occurred when likeDanmu", e);
+            Thread.currentThread().interrupt(); // 重置中断状态
             return false;
         }
 
-        // 检查 bv 是否无效
-        if (bv == null || bv.isEmpty() || !videoExists(bv)) {
-            return false;
-        }
 
-        // 检查当前用户是否为视频的所有者或超级用户
-        if (!isOwner(auth, bv) && !isSuperuser(auth)) {
-            return false;
-        }
 
-        // 执行删除视频的操作
-        return performDeleteVideo(bv);
     }
 
     private boolean videoExists(String bv) {
@@ -350,6 +378,9 @@ public class VideoServiceImpl implements VideoService{
     }
 
     public boolean updateVideoInfo(AuthInfo auth, String bv, PostVideoReq req) {
+
+
+
         // 验证 auth 是否有效
         if (!isValidAuth(auth)) {
             return false;
@@ -407,23 +438,39 @@ public class VideoServiceImpl implements VideoService{
     }
 
     public List<String> searchVideo(AuthInfo auth, String keywords, int pageSize, int pageNum) {
-        // 验证 auth 是否有效
-        if (!isValidAuth(auth)) {
+        Future<List<String>> future = executorService.submit(() -> {
+            // 验证 auth 是否有效
+            if (!isValidAuth(auth)) {
+                return null;
+            }
+
+            // 检查 keywords 是否无效
+            if (keywords == null || keywords.isEmpty()) {
+                return null;
+            }
+
+            // 检查 pageSize 和 pageNum 是否无效
+            if (pageSize <= 0 || pageNum <= 0) {
+                return null;
+            }
+
+            // 执行搜索视频的操作
+            return performSearchVideo(keywords, pageSize, pageNum);
+
+        });
+
+        try {
+            // 等待异步执行完成并获取结果
+            return future.get();
+        } catch (InterruptedException | ExecutionException e) {
+            // 异常处理
+            log.error("Error occurred when searchVideo", e);
+            Thread.currentThread().interrupt(); // 重置中断状态
             return null;
         }
 
-        // 检查 keywords 是否无效
-        if (keywords == null || keywords.isEmpty()) {
-            return null;
-        }
 
-        // 检查 pageSize 和 pageNum 是否无效
-        if (pageSize <= 0 || pageNum <= 0) {
-            return null;
-        }
 
-        // 执行搜索视频的操作
-        return performSearchVideo(keywords, pageSize, pageNum);
     }
 
     private List<String> performSearchVideo(String keywords, int pageSize, int pageNum) {

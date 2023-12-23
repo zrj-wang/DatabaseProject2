@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.PostConstruct;
 import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -15,6 +16,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Random;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -24,6 +29,12 @@ import java.util.regex.Pattern;
 public class UserServiceImpl implements UserService {
     @Autowired
     private DataSource dataSource;
+    private ExecutorService executorService;
+    @PostConstruct
+    public void init() {
+        executorService = Executors.newFixedThreadPool(10);
+    }
+
     public long register(RegisterUserReq req){
         if (req.getPassword() == null || req.getPassword().isEmpty() ||
                 req.getName() == null || req.getName().isEmpty() ||
@@ -39,6 +50,10 @@ public class UserServiceImpl implements UserService {
         // 添加新用户到系统（假设addNewUser方法负责添加用户并返回用户ID）
         return addNewUser(req);
     }
+
+
+
+
     private boolean isValidBirthday(String birthday) {
         // 实现生日有效性检查，确保符合X月X日的格式
             if (birthday == null || birthday.isEmpty()) {
@@ -75,6 +90,9 @@ public class UserServiceImpl implements UserService {
             return true;
         }
     private boolean isUserExist(String name, String qq, String wechat) {
+
+
+
         // 构建SQL查询语句，检查是否存在具有相同用户名、QQ号或微信号的用户
         String sql = "SELECT COUNT(*) FROM users WHERE name = ? OR qq = ? OR wechat = ?";
         try (Connection conn = dataSource.getConnection();
@@ -470,31 +488,48 @@ public class UserServiceImpl implements UserService {
         return false;
     }
     public UserInfoResp getUserInfo(long mid) {
-        // 检查 mid 是否有效
-        if (mid <= 0) {
+        Future<UserInfoResp> future = executorService.submit(() -> {
+// 检查 mid 是否有效
+            if (mid <= 0) {
+                return null;
+            }
+
+            UserInfoResp userInfo = new UserInfoResp();
+            userInfo.setMid(mid);
+
+            try (Connection conn = dataSource.getConnection()) {
+                // 填充 coin
+                userInfo.setCoin(getUserCoin(conn, mid));
+
+                // 填充 following, follower, watched, liked, collected, posted
+                userInfo.setFollowing(getFollowing(conn, mid));
+                userInfo.setFollower(getFollowers(conn, mid));
+                userInfo.setWatched(getWatchedVideos(conn, mid));
+                userInfo.setLiked(getLikedVideos(conn, mid));
+                userInfo.setCollected(getCollectedVideos(conn, mid));
+                userInfo.setPosted(getPostedVideos(conn, mid));
+
+                return userInfo; // 返回用户信息
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return null; // 如果发生异常，返回 null
+
+        });
+
+        try {
+            // 等待异步执行完成并获取结果
+            return future.get();
+        } catch (InterruptedException | ExecutionException e) {
+            // 异常处理
+            log.error("Error occurred when getUserInfo", e);
+            Thread.currentThread().interrupt(); // 重置中断状态
             return null;
         }
 
-        UserInfoResp userInfo = new UserInfoResp();
-        userInfo.setMid(mid);
 
-        try (Connection conn = dataSource.getConnection()) {
-            // 填充 coin
-            userInfo.setCoin(getUserCoin(conn, mid));
 
-            // 填充 following, follower, watched, liked, collected, posted
-            userInfo.setFollowing(getFollowing(conn, mid));
-            userInfo.setFollower(getFollowers(conn, mid));
-            userInfo.setWatched(getWatchedVideos(conn, mid));
-            userInfo.setLiked(getLikedVideos(conn, mid));
-            userInfo.setCollected(getCollectedVideos(conn, mid));
-            userInfo.setPosted(getPostedVideos(conn, mid));
 
-            return userInfo; // 返回用户信息
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return null; // 如果发生异常，返回 null
     }
     private int getUserCoin(Connection conn, long mid) {
         String sql = "SELECT coin FROM Users WHERE mid = ?";
