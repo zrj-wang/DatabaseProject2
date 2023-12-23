@@ -1,10 +1,8 @@
 package io.sustc.service.impl;
 import io.sustc.dto.AuthInfo;
-import io.sustc.dto.DanmuRecord;
-import io.sustc.dto.UserRecord;
-import io.sustc.dto.VideoRecord;
+
 import io.sustc.service.DanmuService;
-import io.sustc.service.DatabaseService;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -13,7 +11,7 @@ import javax.annotation.PostConstruct;
 import javax.sql.DataSource;
 import java.sql.*;
 import java.util.ArrayList;
-import java.util.Arrays;
+
 import java.util.List;
 //zrj-wang
 
@@ -73,12 +71,15 @@ public class DanmuServiceImpl implements DanmuService {
             Thread.currentThread().interrupt();
             return -1;
         }
+
+
     }
 
 
 
     //检查用户认证信息是否有效
     private boolean isValidAuth(AuthInfo auth) {
+        long startTime = System.nanoTime(); // 开始计时
         // 确保至少提供了一个认证信息
         if (auth.getPassword() == null && auth.getQq() == null && auth.getWechat() == null) {
             return false;
@@ -114,6 +115,9 @@ public class DanmuServiceImpl implements DanmuService {
         } catch (SQLException e) {
             e.printStackTrace();
         }
+        long endTime = System.nanoTime(); // 结束计时
+        long duration = endTime - startTime; // 计算持续时间
+        log.info("isValidAuth:" + duration+"ns" );
         return false;
     }
 
@@ -133,6 +137,9 @@ public class DanmuServiceImpl implements DanmuService {
 
 // 实现 checkUserWithQQ, checkUserWithWechat, checkUserWithBoth 方法来检查数据库
 private boolean checkUserWithQQ(String qq) {
+    if (qq == null || qq.trim().isEmpty()) {
+        return false;
+    }
     String sql = "SELECT COUNT(*) FROM Users WHERE qq = ?";
     try (Connection conn = dataSource.getConnection();
          PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -150,6 +157,9 @@ private boolean checkUserWithQQ(String qq) {
 }
 
     private boolean checkUserWithWechat(String wechat) {
+        if (wechat == null || wechat.trim().isEmpty()) {
+            return false;
+        }
         String sql = "SELECT COUNT(*) FROM Users WHERE wechat = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -167,6 +177,9 @@ private boolean checkUserWithQQ(String qq) {
     }
 
     private boolean checkUserWithBoth(String qq, String wechat) {
+        if (qq == null || qq.trim().isEmpty() || wechat == null || wechat.trim().isEmpty()) {
+            return false;
+        }
         String sql = "SELECT COUNT(*) FROM Users WHERE qq = ? AND wechat = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -189,6 +202,11 @@ private boolean checkUserWithQQ(String qq) {
 
 
     private boolean videoExists(String bv) {
+        long startTime = System.nanoTime(); // 开始计时
+        // 直接检查bv是否为空，避免不必要的数据库操作
+        if (bv == null || bv.trim().isEmpty()) {
+            return false;
+        }
         String sql = "SELECT COUNT(*) FROM videos WHERE BV = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -201,10 +219,18 @@ private boolean checkUserWithQQ(String qq) {
         } catch (SQLException e) {
             e.printStackTrace();
         }
+        long endTime = System.nanoTime(); // 结束计时
+        long duration = endTime - startTime; // 计算持续时间
+        log.info("videoExists:" + duration+"ns" );
         return false;
     }
 
     private boolean hasWatchedVideo(long mid, String bv) {
+        long startTime = System.nanoTime(); // 开始计时
+        // 检查参数是否有效
+        if (mid <= 0 || bv == null || bv.trim().isEmpty()) {
+            return false;
+        }
         String sql = "SELECT COUNT(*) FROM watched_relation WHERE user_watched_Mid = ? AND video_view_BV = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -218,10 +244,18 @@ private boolean checkUserWithQQ(String qq) {
         } catch (SQLException e) {
             e.printStackTrace();
         }
+        long endTime = System.nanoTime(); // 结束计时
+        long duration = endTime - startTime; // 计算持续时间
+        log.info("hasWatchedVideo:" + duration+"ns" );
         return false;
     }
 
     private boolean isVideoPublished(String bv) {
+        long startTime = System.nanoTime(); // 开始计时
+        // 检查bv是否有效
+        if (bv == null || bv.trim().isEmpty()) {
+            return false;
+        }
         String sql = "SELECT public_time, review_time FROM videos WHERE BV = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -238,6 +272,9 @@ private boolean checkUserWithQQ(String qq) {
         } catch (SQLException e) {
             e.printStackTrace();
         }
+        long endTime = System.nanoTime(); // 结束计时
+        long duration = endTime - startTime; // 计算持续时间
+        log.info("isVideoPublished:" + duration+"ns" );
         return false;
     }
 
@@ -245,6 +282,11 @@ private boolean checkUserWithQQ(String qq) {
 
 
     private long insertDanmu(String bv, long mid, String content, float time) {
+        long startTime = System.nanoTime(); // 开始计时
+        // 参数有效性检查
+        if (bv == null || bv.trim().isEmpty() || mid <= 0 || content == null || content.trim().isEmpty()) {
+            return -1;
+        }
         String sql = "INSERT INTO danmu (danmu_BV, danmu_Mid, time, content, postTime) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -269,6 +311,9 @@ private boolean checkUserWithQQ(String qq) {
         } catch (SQLException e) {
             e.printStackTrace();
         }
+        long endTime = System.nanoTime(); // 结束计时
+        long duration = endTime - startTime; // 计算持续时间
+        log.info("insertDanmu:" + duration+"ns" );
         return -1;
     }
 
@@ -278,35 +323,63 @@ private boolean checkUserWithQQ(String qq) {
 
     @Override
     public List<Long> displayDanmu(String bv, float timeStart, float timeEnd, boolean filter) {
-        if(!videoExists(bv)){
-            return null;
-        }
 
-        if (!isVideoPublished(bv) || !isValidTimeRange(bv, timeStart, timeEnd)) {
-            return null;
-        }
-
-        String sql = buildDanmuQuerySql(bv, timeStart, timeEnd, filter);
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, bv);
-            pstmt.setFloat(2, timeStart);
-            pstmt.setFloat(3, timeEnd);
-            ResultSet rs = pstmt.executeQuery();
-            List<Long> danmuIds = new ArrayList<>();
-            while (rs.next()) {
-                danmuIds.add(rs.getLong("danmu_id"));
+        Future<List<Long>> future = executorService.submit(() -> {
+            if (bv == null || bv.trim().isEmpty() || timeStart < 0 || timeEnd < 0 || timeStart > timeEnd) {
+                return null;
             }
-            return danmuIds;
-        } catch (SQLException e) {
-            e.printStackTrace();
+            if(!videoExists(bv)){
+                return null;
+            }
+
+            if (!isVideoPublished(bv) || !isValidTimeRange(bv, timeStart, timeEnd)) {
+                return null;
+            }
+
+            String sql = buildDanmuQuerySql(bv, timeStart, timeEnd, filter);
+            try (Connection conn = dataSource.getConnection();
+                 PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                pstmt.setString(1, bv);
+                pstmt.setFloat(2, timeStart);
+                pstmt.setFloat(3, timeEnd);
+                ResultSet rs = pstmt.executeQuery();
+                List<Long> danmuIds = new ArrayList<>();
+                while (rs.next()) {
+                    danmuIds.add(rs.getLong("danmu_id"));
+                }
+                return danmuIds;
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+
+            return null;
+
+
+
+        });
+
+        try {
+            // 等待异步执行完成并获取结果
+            return future.get();
+        } catch (InterruptedException | ExecutionException e) {
+            // 异常处理
+            log.error("Error occurred while sending danmu", e);
+            Thread.currentThread().interrupt(); // 重置中断状态
+            return null;
         }
-        return null;
+
+
+
+
     }
 
 
 
     private boolean isValidTimeRange(String bv, float timeStart, float timeEnd) {
+        // 参数检查
+        if (bv == null || timeStart < 0 || timeEnd < 0 || timeEnd < timeStart) {
+            return false;
+        }
         String sql = "SELECT duration FROM videos WHERE BV = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -336,37 +409,56 @@ private boolean checkUserWithQQ(String qq) {
 
     @Override
     public boolean likeDanmu(AuthInfo auth, long id) {
-        if (!isValidAuth(auth)) {
-            return false;
-        }
 
-        // 检查弹幕是否存在
-        if (!danmuExists(id)) {
-            return false;
-        }
 
-        String sql = "SELECT COUNT(*) FROM danmuLiked_relation WHERE danmu_liked_id = ? AND user_liked_Mid = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
-            pstmt.setLong(1, id);
-            pstmt.setLong(2, auth.getMid());
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                boolean isLiked = rs.getInt(1) > 0;
-
-                if (isLiked) {
-                    // 如果已点赞，取消点赞
-                    return removeLike(conn, id, auth.getMid());
-                } else {
-                    // 如果未点赞，添加点赞
-                    return addLike(conn, id, auth.getMid());
-                }
+        Future<Boolean> future = executorService.submit(() -> {
+            if (auth == null || id <= 0) {
+                return false;
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
+            if (!isValidAuth(auth)) {
+                return false;
+            }
+
+            // 检查弹幕是否存在
+            if (!danmuExists(id)) {
+                return false;
+            }
+
+            String sql = "SELECT COUNT(*) FROM danmuLiked_relation WHERE danmu_liked_id = ? AND user_liked_Mid = ?";
+            try (Connection conn = dataSource.getConnection();
+                 PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+                pstmt.setLong(1, id);
+                pstmt.setLong(2, auth.getMid());
+                ResultSet rs = pstmt.executeQuery();
+                if (rs.next()) {
+                    boolean isLiked = rs.getInt(1) > 0;
+
+                    if (isLiked) {
+                        // 如果已点赞，取消点赞
+                        return removeLike(conn, id, auth.getMid());
+                    } else {
+                        // 如果未点赞，添加点赞
+                        return addLike(conn, id, auth.getMid());
+                    }
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return false;
+
+        });
+
+        try {
+            // 等待异步执行完成并获取结果
+            return future.get();  // 注意：这会阻塞当前线程，直到异步操作完成
+        } catch (InterruptedException | ExecutionException e) {
+            // 异常处理
+            log.error("Error occurred while sending danmu", e);
+            Thread.currentThread().interrupt(); // 重置中断状态
+            return false;
         }
-        return false;
+
     }
 
 
@@ -387,6 +479,9 @@ private boolean checkUserWithQQ(String qq) {
     }
 
     private boolean addLike(Connection conn, long id, long userMid) {
+        if (id <= 0 || userMid <= 0) {
+            return false;
+        }
         String sql = "INSERT INTO danmuLiked_relation (danmu_liked_id, user_liked_Mid) VALUES (?, ?)";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setLong(1, id);
@@ -400,6 +495,9 @@ private boolean checkUserWithQQ(String qq) {
     }
 
     private boolean removeLike(Connection conn, long id, long userMid) {
+        if (id <= 0 || userMid <= 0) {
+            return false;
+        }
         String sql = "DELETE FROM danmuLiked_relation WHERE danmu_liked_id = ? AND user_liked_Mid = ?";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setLong(1, id);

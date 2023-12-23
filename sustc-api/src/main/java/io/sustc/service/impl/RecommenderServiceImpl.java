@@ -27,7 +27,9 @@ public class RecommenderServiceImpl implements RecommenderService {
     public List<String> recommendNextVideo(String bv) {
         // 创建用于存储推荐视频 bv 的列表
         List<String> recommendedVideos = new ArrayList<>();
-
+        if (bv == null || bv.trim().isEmpty()) {
+            return null;
+        }
         // 检查视频是否存在
         if (!videoExists(bv)) {
             return null;
