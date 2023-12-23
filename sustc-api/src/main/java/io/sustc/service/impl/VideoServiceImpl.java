@@ -1,6 +1,7 @@
 package io.sustc.service.impl;
 import io.sustc.dto.AuthInfo;
 import io.sustc.dto.PostVideoReq;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.sql.DataSource;
@@ -14,9 +15,12 @@ import java.util.UUID;
 import io.sustc.dto.VideoRecord;
 import io.sustc.service.UserService;
 import io.sustc.service.VideoService;
+import org.springframework.stereotype.Service;
 
 
 //jz-gong
+@Service
+@Slf4j
 public class VideoServiceImpl implements VideoService{
     @Autowired
     private DataSource dataSource;
