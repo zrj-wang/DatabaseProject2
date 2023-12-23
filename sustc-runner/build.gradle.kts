@@ -21,6 +21,8 @@ dependencies {
     implementation(platform("org.springframework.shell:spring-shell-dependencies:2.1.13"))
     implementation("org.springframework.shell:spring-shell-starter")
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
+
+
 }
 
 tasks.withType<JavaExec> {

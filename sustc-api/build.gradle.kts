@@ -8,11 +8,14 @@ plugins {
     alias(libs.plugins.spring.dependencyManagement)
     alias(libs.plugins.lombok)
     alias(libs.plugins.shadow)
+
 }
 
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
     compileOnly("com.opencsv:opencsv:5.8")
+
+    implementation ("org.postgresql:postgresql:42.2.12")
 
     // You may add any utility library you want to use, such as guava.
     // ORM libraries are prohibited in this project.
