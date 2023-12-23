@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.PostConstruct;
 import javax.sql.DataSource;
 import java.sql.*;
 import java.util.ArrayList;
@@ -16,6 +17,10 @@ import java.util.Arrays;
 import java.util.List;
 //zrj-wang
 
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 @Service
 @Slf4j
@@ -24,30 +29,53 @@ public class DanmuServiceImpl implements DanmuService {
     private DataSource dataSource;
 
 
+    private ExecutorService executorService;
+
+    // 类构造函数或者 @PostConstruct 初始化方法中初始化线程池
+    @PostConstruct
+    public void init() {
+        executorService = Executors.newFixedThreadPool(10);
+    }
+
+
     @Override
     public long sendDanmu(AuthInfo auth, String bv, String content, float time) {
-        if (auth == null || !isValidAuth(auth)) {
+        Future<Long> future = executorService.submit(() -> {
+            if (auth == null || !isValidAuth(auth)) {
+                return -1L;
+            }
+
+            if (bv == null || !videoExists(bv)) {
+                return -1L;
+            }
+
+            if (content == null || content.trim().isEmpty()) {
+                return -1L;
+            }
+
+            if (!isVideoPublished(bv)) {
+                return -1L;
+            }
+
+            if (!hasWatchedVideo(auth.getMid(), bv)) {
+                return -1L;
+            }
+
+            return insertDanmu(bv, auth.getMid(), content, time);
+
+        });
+
+        try {
+
+            return future.get();
+        } catch (InterruptedException  | ExecutionException e) {
+            log.error("Error occurred while sending danmu", e);
+            Thread.currentThread().interrupt();
             return -1;
         }
-
-        if (bv == null || !videoExists(bv)) {
-            return -1;
-        }
-
-        if (content == null || content.trim().isEmpty()) {
-            return -1;
-        }
-
-        if (!isVideoPublished(bv)) {
-            return -1;
-        }
-
-        if (!hasWatchedVideo(auth.getMid(), bv)) {
-            return -1;
-        }
-
-        return insertDanmu(bv, auth.getMid(), content, time);
     }
+
+
 
     //检查用户认证信息是否有效
     private boolean isValidAuth(AuthInfo auth) {
@@ -160,9 +188,6 @@ private boolean checkUserWithQQ(String qq) {
 
 
 
-
-
-
     private boolean videoExists(String bv) {
         String sql = "SELECT COUNT(*) FROM videos WHERE BV = ?";
         try (Connection conn = dataSource.getConnection();
@@ -246,9 +271,6 @@ private boolean checkUserWithQQ(String qq) {
         }
         return -1;
     }
-
-
-
 
 
 

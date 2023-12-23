@@ -306,7 +306,7 @@ public class RecommenderServiceImpl implements RecommenderService {
                 "JOIN Users u ON fr2.user_Mid = u.mid " +
                 "WHERE fr1.user_Mid = ? AND fr2.user_Mid NOT IN (SELECT follow_Mid FROM following_relation WHERE user_Mid = ?) " +
                 "GROUP BY fr2.user_Mid, u.level " +
-                "ORDER BY common_followings DESC, u.level " +
+                "ORDER BY common_followings DESC, u.level, fr2.user_Mid ASC " +
                 "LIMIT ? OFFSET ?";
 
         try (Connection conn = dataSource.getConnection();
