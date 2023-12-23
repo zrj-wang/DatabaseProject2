@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-
+import org.mindrot.jbcrypt.BCrypt;
 
 //zrj-wang
 
@@ -134,8 +134,7 @@ public class DatabaseServiceImpl implements DatabaseService {
 
     private void importUsers(Connection conn, List<UserRecord> userRecords) {
         try {
-            //users
-
+            // SQL语句
             String userSql = "INSERT INTO users (mid, name, sex, birthday, level, coin, sign, identity, password, qq, wechat) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             String followingSql = "INSERT INTO following_relation (user_Mid, follow_Mid) VALUES (?, ?)";
 
@@ -144,7 +143,10 @@ public class DatabaseServiceImpl implements DatabaseService {
 
             int count = 0;
             for (UserRecord user : userRecords) {
-                // 插入用户记录
+                // 使用bcrypt加密用户密码
+                String encryptedPassword = BCrypt.hashpw(user.getPassword(), BCrypt.gensalt());
+
+                // 设置预处理语句参数
                 userPstmt.setLong(1, user.getMid());
                 userPstmt.setString(2, user.getName());
                 userPstmt.setString(3, user.getSex());
@@ -153,15 +155,14 @@ public class DatabaseServiceImpl implements DatabaseService {
                 userPstmt.setInt(6, user.getCoin());
                 userPstmt.setString(7, user.getSign());
                 userPstmt.setString(8, user.getIdentity().name());
-                userPstmt.setString(9, user.getPassword());
+                userPstmt.setString(9, encryptedPassword); // 设置加密后的密码
                 userPstmt.setString(10, user.getQq());
                 userPstmt.setString(11, user.getWechat());
 
                 userPstmt.addBatch(); // 添加到批处理
 
-
                 if (++count % 500 == 0) {
-                    userPstmt.executeBatch();
+                    userPstmt.executeBatch(); // 每500条执行一次批处理
                 }
             }
             userPstmt.executeBatch(); // 执行剩余的批处理
@@ -173,10 +174,9 @@ public class DatabaseServiceImpl implements DatabaseService {
                     followingPstmt.addBatch();
                 }
                 if (++count % 500 == 0) {
-                    followingPstmt.executeBatch();
+                    followingPstmt.executeBatch(); // 执行剩余的批处理
                 }
             }
-
             followingPstmt.executeBatch(); // 执行剩余的批处理
 
         } catch (SQLException e) {

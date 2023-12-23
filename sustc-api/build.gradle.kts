@@ -14,7 +14,7 @@ plugins {
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
     compileOnly("com.opencsv:opencsv:5.8")
-
+    implementation("org.mindrot:jbcrypt:0.4")
     implementation ("org.postgresql:postgresql:42.2.12")
 
     // You may add any utility library you want to use, such as guava.
