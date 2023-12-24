@@ -634,7 +634,10 @@ public class VideoServiceImpl implements VideoService{
 
     private double performGetAverageViewRate(String bv) {
         // SQL 查询语句
-        String sql = "SELECT AVG(view_time / duration) FROM video_records WHERE BV = ?";
+        String sql = "SELECT AVG(watched_time / duration) AS average_view_rate " +
+                "FROM watched_relation INNER JOIN videos ON watched_relation.video_watched_BV = videos.BV " +
+                "WHERE watched_relation.video_watched_BV = ?";
+
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
@@ -647,7 +650,7 @@ public class VideoServiceImpl implements VideoService{
             // 检查查询结果
             if (rs.next()) {
                 // 如果查询结果不为空，返回平均观看率
-                return rs.getDouble(1);
+                return rs.getDouble("average_view_rate");
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -656,6 +659,7 @@ public class VideoServiceImpl implements VideoService{
         // 如果没有找到视频或发生异常，返回 -1
         return -1;
     }
+
 
     /**
      * Gets the hotspot of a video.
