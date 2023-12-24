@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import javax.sql.DataSource;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.*;
 import java.util.ArrayList;
 
@@ -95,8 +97,12 @@ public class DanmuServiceImpl implements DanmuService {
             if (rs.next()) {
                 String storedPassword = rs.getString("password");
 
-                // 检查密码是否匹配
-                boolean isPasswordValid = auth.getPassword() != null && auth.getPassword().equals(storedPassword);
+                // 对用户输入的密码进行加密，以便与数据库中的加密密码进行比较
+                String encryptedInputPassword = hashPasswordWithSHA256(auth.getPassword());
+
+                // 检查加密后的密码是否匹配
+                boolean isPasswordValid = encryptedInputPassword.equals(storedPassword);
+
                 if (!isPasswordValid) {
                     return false;
                 }
@@ -502,5 +508,21 @@ private boolean checkUserWithQQ(String qq) {
         return false;
     }
 
+    private String hashPasswordWithSHA256(String password) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            md.update(password.getBytes());
+
+            byte[] digest = md.digest();
+            StringBuilder sb = new StringBuilder();
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b));
+            }
+
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("Failed to hash password", e);
+        }
+    }
 
 }

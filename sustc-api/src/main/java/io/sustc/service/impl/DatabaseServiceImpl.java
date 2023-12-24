@@ -9,6 +9,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -16,6 +18,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import org.mindrot.jbcrypt.BCrypt;
 
 import java.util.concurrent.*;
 
@@ -79,7 +82,9 @@ public class DatabaseServiceImpl implements DatabaseService {
                  PreparedStatement likedPstmt1 = conn.prepareStatement(likbySql)) {
                 int count = 0;
                 for (UserRecord user : userRecords) {
+//                    String hashedPassword = BCrypt.hashpw(user.getPassword(), BCrypt.gensalt());
                     // 插入用户记录
+                    String hashedPassword = hashPasswordWithSHA256(user.getPassword());
                     userPstmt.setLong(1, user.getMid());
                     userPstmt.setString(2, user.getName());
                     userPstmt.setString(3, user.getSex());
@@ -88,7 +93,7 @@ public class DatabaseServiceImpl implements DatabaseService {
                     userPstmt.setInt(6, user.getCoin());
                     userPstmt.setString(7, user.getSign());
                     userPstmt.setString(8, user.getIdentity().name());
-                    userPstmt.setString(9, user.getPassword());
+                    userPstmt.setString(9, hashedPassword); // 使用 SHA-256 哈希后的密码
                     userPstmt.setString(10, user.getQq());
                     userPstmt.setString(11, user.getWechat());
 
@@ -236,6 +241,22 @@ public class DatabaseServiceImpl implements DatabaseService {
 
 
 
+    private String hashPasswordWithSHA256(String password) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            md.update(password.getBytes());
+
+            byte[] digest = md.digest();
+            StringBuilder sb = new StringBuilder();
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b));
+            }
+
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("Failed to hash password", e);
+        }
+    }
 
 
 

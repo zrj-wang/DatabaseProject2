@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.annotation.PostConstruct;
 import javax.sql.DataSource;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.*;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -107,8 +109,11 @@ public class VideoServiceImpl implements VideoService{
             if (rs.next()) {
                 String storedPassword = rs.getString("password");
 
-                // 检查密码是否匹配
-                boolean isPasswordValid = auth.getPassword() != null && auth.getPassword().equals(storedPassword);
+                // 使用 SHA-256 对用户输入的密码进行加密
+                String encryptedInputPassword = hashPasswordWithSHA256(auth.getPassword());
+
+                // 检查加密后的密码是否匹配
+                boolean isPasswordValid = encryptedInputPassword.equals(storedPassword);
                 if (!isPasswordValid) {
                     return false;
                 }
@@ -760,5 +765,21 @@ public class VideoServiceImpl implements VideoService{
         }
         // 如果没有找到视频或发生异常，返回 false
         return false;
+    }
+    private String hashPasswordWithSHA256(String password) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            md.update(password.getBytes());
+
+            byte[] digest = md.digest();
+            StringBuilder sb = new StringBuilder();
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b));
+            }
+
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("Failed to hash password", e);
+        }
     }
 }
