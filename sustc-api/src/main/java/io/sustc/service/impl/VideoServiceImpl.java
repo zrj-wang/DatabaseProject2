@@ -690,7 +690,7 @@ public class VideoServiceImpl implements VideoService{
 
     private Set<Integer> performGetHotspot(String bv) {
         // SQL 查询语句
-        String sql = "SELECT time / 10 AS chunk, COUNT(*) AS cnt FROM danmus WHERE BV = ? GROUP BY chunk ORDER BY cnt DESC";
+        String sql = "SELECT time / 10 AS chunk, COUNT(*) AS cnt FROM danmu WHERE BV = ? GROUP BY chunk ORDER BY cnt DESC";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
