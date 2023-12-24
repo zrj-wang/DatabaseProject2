@@ -222,10 +222,8 @@ public class VideoServiceImpl implements VideoService{
     }
 
     private String generateBV() {
-        // 使用当前时间戳和随机UUID生成BV号
-        long timestamp = System.currentTimeMillis();
-        String uuid = UUID.randomUUID().toString().substring(0, 8); // 获取UUID的前8个字符
-        return "BV" + timestamp + uuid;
+        String uuid = UUID.randomUUID().toString().substring(0, 10); // 获取UUID的前10个字符
+        return "BV" + uuid;
     }
     private boolean isBVExist(String bv) {
         String sql = "SELECT COUNT(*) FROM videos WHERE BV = ?";
