@@ -376,8 +376,6 @@ public class VideoServiceImpl implements VideoService{
 
             // 执行删除视频的操作
             return performDeleteVideo(bv);
-
-
         });
 
         try {
@@ -385,13 +383,10 @@ public class VideoServiceImpl implements VideoService{
             return future.get();
         } catch (InterruptedException | ExecutionException e) {
             // 异常处理
-            log.error("Error occurred when likeDanmu", e);
+            log.error("Error occurred when deleting video", e);
             Thread.currentThread().interrupt(); // 重置中断状态
             return false;
         }
-
-
-
     }
 
     private boolean videoExists(String bv) {
@@ -472,34 +467,64 @@ public class VideoServiceImpl implements VideoService{
 
 
     private boolean performDeleteVideo(String bv) {
-        // SQL 删除语句
-        String sql = "DELETE FROM videos WHERE BV = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        Connection conn = null;
+        try {
+            conn = dataSource.getConnection();
+            // 开启事务
+            conn.setAutoCommit(false);
 
-            // 设置查询参数
-            pstmt.setString(1, bv);
+            // 删除与视频相关的数据
+            deleteRelatedData(conn, bv, "danmu", "danmu_BV");
+            deleteRelatedData(conn, bv, "liked_relation", "video_like_BV");
+            deleteRelatedData(conn, bv, "favorite_relation", "video_favorite_BV");
+            deleteRelatedData(conn, bv, "coin_relation", "video_coin_BV");
 
-            // 执行删除
-            int rowsAffected = pstmt.executeUpdate();
-
-            // 检查删除结果
-            if (rowsAffected > 0) {
-                // 如果受影响的行数大于0，删除成功
-                return true;
+            // 删除视频本身
+            String sqlDeleteVideo = "DELETE FROM videos WHERE BV = ?";
+            try (PreparedStatement pstmtDeleteVideo = conn.prepareStatement(sqlDeleteVideo)) {
+                pstmtDeleteVideo.setString(1, bv);
+                int rowsAffected = pstmtDeleteVideo.executeUpdate();
+                if (rowsAffected <= 0) {
+                    conn.rollback();
+                    return false;
+                }
             }
+
+            // 提交事务
+            conn.commit();
+            return true;
         } catch (SQLException e) {
             e.printStackTrace();
-            // 在生产环境中，应该使用日志记录异常信息，而不是打印堆栈跟踪
+            try {
+                if (conn != null) {
+                    conn.rollback();
+                }
+            } catch (SQLException ex) {
+                ex.printStackTrace();
+            }
+        } finally {
+            // 关闭连接
+            if (conn != null) {
+                try {
+                    conn.setAutoCommit(true);
+                    conn.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
         }
-        // 如果没有找到视频或发生异常，返回 false
         return false;
     }
 
+    private void deleteRelatedData(Connection conn, String bv, String tableName, String column) throws SQLException {
+        String sqlDeleteRelated = "DELETE FROM " + tableName + " WHERE " + column + " = ?";
+        try (PreparedStatement pstmtDeleteRelated = conn.prepareStatement(sqlDeleteRelated)) {
+            pstmtDeleteRelated.setString(1, bv);
+            pstmtDeleteRelated.executeUpdate();
+        }
+    }
+
     public boolean updateVideoInfo(AuthInfo auth, String bv, PostVideoReq req) {
-
-
-
         // 验证 auth 是否有效
         if (!isValidAuth(auth)) {
             return false;
@@ -512,14 +537,12 @@ public class VideoServiceImpl implements VideoService{
 
         // 检查 req 是否无效
         if (req == null || req.getTitle() == null || req.getTitle().isEmpty() ||
-                req.getDuration() < 10 ||
-                (req.getPublicTime() != null && req.getPublicTime().toLocalDateTime().isBefore(LocalDateTime.now())) ||
-                isTitleExist(auth.getMid(), req.getTitle())) {
+                (req.getPublicTime() != null && req.getPublicTime().toLocalDateTime().isBefore(LocalDateTime.now()))) {
             return false;
         }
 
-        // 检查当前用户是否为视频的所有者或超级用户
-        if (!isOwner(auth, bv) && !isSuperuser(auth)) {
+        // 检查当前用户是否为视频的所有者
+        if (!isOwner(auth, bv)) {
             return false;
         }
 
@@ -528,17 +551,27 @@ public class VideoServiceImpl implements VideoService{
     }
 
     private boolean performUpdateVideoInfo(String bv, PostVideoReq req) {
+        // 获取当前视频的信息
+        VideoRecord currentInfo = getCurrentVideoInfo(bv);
+        if (currentInfo == null) {
+            return false; // 视频不存在或无法获取其信息
+        }
+
+        // 检查视频时长是否被更改
+        if (req.getDuration() != currentInfo.getDuration()) {
+            return false; // 不能更改视频时长
+        }
+
         // SQL 更新语句
-        String sql = "UPDATE videos SET title = ?, public_time = ?, duration = ?, description = ? WHERE BV = ?";
+        String sql = "UPDATE videos SET title = ?, public_time = ?, description = ? WHERE BV = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             // 设置查询参数
             pstmt.setString(1, req.getTitle());
             pstmt.setTimestamp(2, req.getPublicTime());
-            pstmt.setLong(3, (long) req.getDuration());
-            pstmt.setString(4, req.getDescription());
-            pstmt.setString(5, bv);
+            pstmt.setString(3, req.getDescription());
+            pstmt.setString(4, bv);
 
             // 执行更新
             int rowsAffected = pstmt.executeUpdate();
@@ -546,7 +579,7 @@ public class VideoServiceImpl implements VideoService{
             // 检查更新结果
             if (rowsAffected > 0) {
                 // 如果受影响的行数大于0，更新成功
-                return true;
+                return currentInfo.getReviewTime() != null; // 如果之前已审核，需要重新审核
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -555,6 +588,40 @@ public class VideoServiceImpl implements VideoService{
         // 如果没有找到视频或发生异常，返回 false
         return false;
     }
+
+    private VideoRecord getCurrentVideoInfo(String bv) {
+        String sql = "SELECT bv, title, owner_Mid, commit_time, review_time, public_time, duration, description FROM videos WHERE BV = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setString(1, bv);
+            ResultSet rs = pstmt.executeQuery();
+
+            if (rs.next()) {
+                VideoRecord videoRecord = new VideoRecord();
+                videoRecord.setBv(rs.getString("bv"));
+                videoRecord.setTitle(rs.getString("title"));
+                videoRecord.setOwnerMid(rs.getLong("owner_Mid"));
+                // videoRecord.setOwnerName(...); // 需要额外的查询来获取用户名称
+                videoRecord.setCommitTime(rs.getTimestamp("commit_time"));
+                videoRecord.setReviewTime(rs.getTimestamp("review_time"));
+                videoRecord.setPublicTime(rs.getTimestamp("public_time"));
+                videoRecord.setDuration(rs.getFloat("duration"));
+                videoRecord.setDescription(rs.getString("description"));
+                // videoRecord.setReviewer(...); // 如果需要，需要额外的查询来获取审核者信息
+                // 其他数组字段（like, coin, favorite, viewerMids, viewTime）也需要额外的查询来填充
+
+                return videoRecord;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            // 在生产环境中，应该使用日志记录异常信息，而不是打印堆栈跟踪
+        }
+        return null;
+    }
+
+
+
 
     public List<String> searchVideo(AuthInfo auth, String keywords, int pageSize, int pageNum) {
         Future<List<String>> future = executorService.submit(() -> {
@@ -593,32 +660,58 @@ public class VideoServiceImpl implements VideoService{
     }
 
     private List<String> performSearchVideo(String keywords, int pageSize, int pageNum) {
-        // SQL 查询语句
-        String sql = "SELECT BV FROM videos WHERE title LIKE ? LIMIT ? OFFSET ?";
+        // 分割关键词
+        String[] keywordArray = keywords.split("\\s+");
+
+        // 构建基础查询
+        String baseQuery = "SELECT v.BV, ";
+        StringBuilder relevanceCalculation = new StringBuilder("0");
+
+        // 为每个关键词添加相关性计算
+        for (String keyword : keywordArray) {
+            relevanceCalculation.append(" + ")
+                    .append("LENGTH(v.title) - LENGTH(REPLACE(LOWER(v.title), LOWER('").append(keyword).append("'), ''))")
+                    .append("/LENGTH('").append(keyword).append("')")
+                    .append(" + ")
+                    .append("LENGTH(v.description) - LENGTH(REPLACE(LOWER(v.description), LOWER('").append(keyword).append("'), ''))")
+                    .append("/LENGTH('").append(keyword).append("')")
+                    .append(" + ")
+                    .append("LENGTH(u.name) - LENGTH(REPLACE(LOWER(u.name), LOWER('").append(keyword).append("'), ''))")
+                    .append("/LENGTH('").append(keyword).append("')");
+        }
+
+        String fromClause = " FROM videos v JOIN users u ON v.owner_Mid = u.mid LEFT JOIN watched_relation w ON v.BV = w.video_watched_BV ";
+        String groupByClause = " GROUP BY v.BV ";
+        String orderByClause = " ORDER BY " + relevanceCalculation.toString() + " DESC, COUNT(w.video_watched_BV) DESC ";
+        String limitClause = " LIMIT ? OFFSET ?";
+
+        // 组合最终的 SQL 语句
+        String sql = baseQuery + relevanceCalculation.toString() + " AS relevance, COUNT(w.video_watched_BV) as view_count " + fromClause + groupByClause + orderByClause + limitClause;
+
+        // 执行查询并处理结果
+        List<String> bvList = new ArrayList<>();
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
-            // 设置查询参数
-            pstmt.setString(1, "%" + keywords + "%");
-            pstmt.setInt(2, pageSize);
-            pstmt.setInt(3, (pageNum - 1) * pageSize);
+            pstmt.setInt(1, pageSize);
+            pstmt.setInt(2, (pageNum - 1) * pageSize);
 
-            // 执行查询
             ResultSet rs = pstmt.executeQuery();
 
-            // 检查查询结果
-            List<String> bvList = new ArrayList<>();
             while (rs.next()) {
                 bvList.add(rs.getString("BV"));
             }
-            return bvList;
         } catch (SQLException e) {
             e.printStackTrace();
-            // 在生产环境中，应该使用日志记录异常信息，而不是打印堆栈跟踪
+            // 在生产环境中，应该使用日志记录异常信息
+            return null;
         }
-        // 如果没有找到视频或发生异常，返回 null
-        return null;
+
+        return bvList;
     }
+
+
+
 
     public double getAverageViewRate(String bv) {
         // 检查 bv 是否无效
@@ -632,9 +725,9 @@ public class VideoServiceImpl implements VideoService{
 
     private double performGetAverageViewRate(String bv) {
         // SQL 查询语句
-        String sql = "SELECT AVG(watched_time / duration) AS average_view_rate " +
-                "FROM watched_relation INNER JOIN videos ON watched_relation.video_watched_BV = videos.BV " +
-                "WHERE watched_relation.video_watched_BV = ?";
+        String sql = "SELECT AVG(CAST(w.watched_time AS FLOAT) / v.duration) AS average_view_rate " +
+                "FROM watched_relation w INNER JOIN videos v ON w.video_watched_BV = v.BV " +
+                "WHERE w.video_watched_BV = ?";
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -647,8 +740,13 @@ public class VideoServiceImpl implements VideoService{
 
             // 检查查询结果
             if (rs.next()) {
-                // 如果查询结果不为空，返回平均观看率
-                return rs.getDouble("average_view_rate");
+                double avgRate = rs.getDouble("average_view_rate");
+                if (rs.wasNull()) {
+                    // 如果结果是空的（即没有人观看视频），返回 -1
+                    return -1;
+                }
+                // 返回计算出的平均观看率
+                return avgRate;
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -679,7 +777,7 @@ public class VideoServiceImpl implements VideoService{
     public Set<Integer> getHotspot(String bv) {
         // 检查 bv 是否无效
         if (bv == null || bv.isEmpty() || !videoExists(bv)) {
-            return null;
+            return Collections.emptySet();
         }
 
         // 执行计算热点的操作
@@ -701,6 +799,11 @@ public class VideoServiceImpl implements VideoService{
             ResultSet rs = pstmt.executeQuery();
 
             // 处理查询结果
+            if (!rs.isBeforeFirst()) {
+                // 如果结果集为空，表示没有弹幕，返回空集合
+                return Collections.emptySet();
+            }
+
             while (rs.next()) {
                 // 将每个热点时间段的索引添加到集合中
                 hotspots.add(rs.getInt("chunk"));
@@ -710,8 +813,8 @@ public class VideoServiceImpl implements VideoService{
             e.printStackTrace();
             // 在生产环境中，应该使用日志记录异常信息，而不是打印堆栈跟踪
         }
-        // 如果没有找到视频或发生异常，返回空集合
-        return new HashSet<>();
+        // 如果发生异常，返回空集合
+        return Collections.emptySet();
     }
 
     public boolean reviewVideo(AuthInfo auth, String bv) {
@@ -730,12 +833,23 @@ public class VideoServiceImpl implements VideoService{
             return false;
         }
 
+        // 检查当前用户是否为视频的所有者
+        if (isOwner(auth, bv)) {
+            return false;
+        }
+
+        // 检查视频是否已经被审核
+        if (isVideoReviewed(bv)) {
+            return false;
+        }
+
         // 执行审核视频的操作
         return performReviewVideo(bv);
     }
+
     private boolean performReviewVideo(String bv) {
         // SQL 更新语句
-        String sql = "UPDATE videos SET review_time = ? WHERE BV = ?";
+        String sql = "UPDATE videos SET review_time = ? WHERE BV = ? AND review_time IS NULL";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
@@ -747,17 +861,40 @@ public class VideoServiceImpl implements VideoService{
             int rowsAffected = pstmt.executeUpdate();
 
             // 检查更新结果
-            if (rowsAffected > 0) {
-                // 如果受影响的行数大于0，更新成功
-                return true;
+            return rowsAffected > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            // 在生产环境中，应该使用日志记录异常信息
+        }
+        return false;
+    }
+    private boolean isVideoReviewed(String bv) {
+        // SQL 查询语句
+        String sql = "SELECT review_time FROM videos WHERE BV = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            // 设置查询参数
+            pstmt.setString(1, bv);
+
+            // 执行查询
+            ResultSet rs = pstmt.executeQuery();
+
+            // 检查查询结果
+            if (rs.next()) {
+                // 获取 review_time 字段的值
+                Timestamp reviewTime = rs.getTimestamp("review_time");
+                // 如果 review_time 不为 null，则视频已被审核
+                return reviewTime != null;
             }
         } catch (SQLException e) {
             e.printStackTrace();
-            // 在生产环境中，应该使用日志记录异常信息，而不是打印堆栈跟踪
+            // 在生产环境中，应该使用日志记录异常信息
         }
-        // 如果没有找到视频或发生异常，返回 false
+        // 如果查询不到视频或发生异常，假设视频未被审核
         return false;
     }
+
     public boolean coinVideo(AuthInfo auth, String bv) {
         // 验证 auth 是否有效
         if (!isValidAuth(auth)) {
