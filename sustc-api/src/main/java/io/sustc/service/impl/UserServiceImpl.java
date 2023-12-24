@@ -121,12 +121,13 @@ public class UserServiceImpl implements UserService {
     private long addNewUser(RegisterUserReq req) {
         // 首先生成一个唯一的 mid
         long mid = generateUniqueMid();
+
         // 对用户密码使用 SHA-256 加密
         String encryptedPassword = hashPasswordWithSHA256(req.getPassword());
 
-        // SQL 插入语句
-        String sql = "INSERT INTO Users (mid, name, sex, birthday, sign, password, qq, wechat) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+        // SQL 插入语句，包括了默认值设置
+        String sql = "INSERT INTO Users (mid, name, sex, birthday, level, coin, identity, sign, password, qq, wechat) " +
+                "VALUES (?, ?, ?, ?, 0, 0, 'USER', ?, ?, ?, ?)";
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
