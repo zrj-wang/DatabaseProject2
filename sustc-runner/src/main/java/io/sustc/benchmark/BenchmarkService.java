@@ -57,7 +57,7 @@ public class BenchmarkService {
         databaseService.truncate();
     }
 
-    //@BenchmarkStep(order = 1, timeout = 35, description = "Import data")
+    @BenchmarkStep(order = 1, timeout = 35, description = "Import data")
     public BenchmarkResult importData() {
         List<DanmuRecord> danmuRecords = deserialize(BenchmarkConstants.IMPORT_DATA, BenchmarkConstants.DANMU_RECORDS);
         List<UserRecord> userRecords = deserialize(BenchmarkConstants.IMPORT_DATA, BenchmarkConstants.USER_RECORDS);

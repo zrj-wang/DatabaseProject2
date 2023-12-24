@@ -94,26 +94,22 @@ public class VideoServiceImpl implements VideoService{
 
 
     private boolean isValidAuth(AuthInfo auth) {
-        // 确保至少提供了一个认证信息
-        if (auth.getPassword() == null && auth.getQq() == null && auth.getWechat() == null) {
-            return false;
-        }
-
         String sql = "SELECT password, qq, wechat FROM Users WHERE mid = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+        ResultSet rs = null;
 
+        try {
+            conn = dataSource.getConnection();
+            pstmt = conn.prepareStatement(sql);
             pstmt.setLong(1, auth.getMid());
-            ResultSet rs = pstmt.executeQuery();
+            rs = pstmt.executeQuery();
 
             if (rs.next()) {
                 String storedPassword = rs.getString("password");
-
-                // 使用 SHA-256 对用户输入的密码进行加密
                 String encryptedInputPassword = hashPasswordWithSHA256(auth.getPassword());
-
-                // 检查加密后的密码是否匹配
                 boolean isPasswordValid = encryptedInputPassword.equals(storedPassword);
+
                 if (!isPasswordValid) {
                     return false;
                 }
@@ -131,9 +127,34 @@ public class VideoServiceImpl implements VideoService{
             }
         } catch (SQLException e) {
             e.printStackTrace();
+        } finally {
+            // 关闭连接、语句和结果集
+            if (rs != null) {
+                try {
+                    rs.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
+            if (pstmt != null) {
+                try {
+                    pstmt.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
+            if (conn != null) {
+                try {
+                    conn.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
         }
+
         return false;
     }
+
 
     private boolean checkQQWechat(AuthInfo auth) {
         if (auth.getQq() != null && auth.getWechat() != null) {
@@ -151,57 +172,154 @@ public class VideoServiceImpl implements VideoService{
 
     // 实现 checkUserWithQQ, checkUserWithWechat, checkUserWithBoth 方法来检查数据库
     private boolean checkUserWithQQ(String qq) {
+        if (qq == null || qq.trim().isEmpty()) {
+            return false;
+        }
         String sql = "SELECT COUNT(*) FROM Users WHERE qq = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+        ResultSet rs = null;
 
+        try {
+            conn = dataSource.getConnection();
+            pstmt = conn.prepareStatement(sql);
             pstmt.setString(1, qq);
-            ResultSet rs = pstmt.executeQuery();
+            rs = pstmt.executeQuery();
 
             if (rs.next()) {
                 return rs.getInt(1) > 0;
             }
         } catch (SQLException e) {
             e.printStackTrace();
+        } finally {
+            // 关闭连接、语句和结果集
+            if (rs != null) {
+                try {
+                    rs.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
+            if (pstmt != null) {
+                try {
+                    pstmt.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
+            if (conn != null) {
+                try {
+                    conn.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
         }
+
         return false;
     }
+
+
+
 
     private boolean checkUserWithWechat(String wechat) {
+        if (wechat == null || wechat.trim().isEmpty()) {
+            return false;
+        }
         String sql = "SELECT COUNT(*) FROM Users WHERE wechat = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+        ResultSet rs = null;
 
+        try {
+            conn = dataSource.getConnection();
+            pstmt = conn.prepareStatement(sql);
             pstmt.setString(1, wechat);
-            ResultSet rs = pstmt.executeQuery();
+            rs = pstmt.executeQuery();
 
             if (rs.next()) {
                 return rs.getInt(1) > 0;
             }
         } catch (SQLException e) {
             e.printStackTrace();
+        } finally {
+            // 关闭连接、语句和结果集
+            if (rs != null) {
+                try {
+                    rs.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
+            if (pstmt != null) {
+                try {
+                    pstmt.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
+            if (conn != null) {
+                try {
+                    conn.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
         }
+
         return false;
     }
+
+
 
     private boolean checkUserWithBoth(String qq, String wechat) {
+        if (qq == null || qq.trim().isEmpty() || wechat == null || wechat.trim().isEmpty()) {
+            return false;
+        }
         String sql = "SELECT COUNT(*) FROM Users WHERE qq = ? AND wechat = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+        ResultSet rs = null;
 
+        try {
+            conn = dataSource.getConnection();
+            pstmt = conn.prepareStatement(sql);
             pstmt.setString(1, qq);
             pstmt.setString(2, wechat);
-            ResultSet rs = pstmt.executeQuery();
+            rs = pstmt.executeQuery();
 
             if (rs.next()) {
                 return rs.getInt(1) > 0;
             }
         } catch (SQLException e) {
             e.printStackTrace();
+        } finally {
+            // 关闭连接、语句和结果集
+            if (rs != null) {
+                try {
+                    rs.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
+            if (pstmt != null) {
+                try {
+                    pstmt.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
+            if (conn != null) {
+                try {
+                    conn.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
         }
+
         return false;
     }
-
 
     private boolean isTitleExist(long mid, String title) {
         String sql = "SELECT COUNT(*) FROM videos WHERE owner_Mid = ? AND title = ?";
