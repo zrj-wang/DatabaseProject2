@@ -48,7 +48,7 @@ public class BenchmarkService {
 
     private final Set<Long> registeredUser = new ConcurrentSkipListSet<>();
 
-    @BenchmarkStep(order = 0, description = "Truncate tables")
+//    @BenchmarkStep(order = 0, description = "Truncate tables")
     public void truncate() {
         if (!config.isStudentMode()) {
             return;

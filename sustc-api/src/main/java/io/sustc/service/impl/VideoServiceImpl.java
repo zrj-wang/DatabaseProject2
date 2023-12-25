@@ -677,7 +677,7 @@ public class VideoServiceImpl implements VideoService{
         }
 
         String fromClause = " FROM videos v JOIN users u ON v.owner_Mid = u.mid LEFT JOIN watched_relation w ON v.BV = w.video_watched_BV ";
-        String groupByClause = " GROUP BY v.BV ";
+        String groupByClause = " GROUP BY v.BV, u.name "; // 包括 u.name 在 GROUP BY 子句中
         String orderByClause = " ORDER BY " + relevanceCalculation.toString() + " DESC, COUNT(w.video_watched_BV) DESC ";
         String limitClause = " LIMIT ? OFFSET ?";
 
@@ -707,6 +707,7 @@ public class VideoServiceImpl implements VideoService{
 
         return bvList;
     }
+
 
 
 
