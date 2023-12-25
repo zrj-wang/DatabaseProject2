@@ -48,7 +48,7 @@ public class BenchmarkService {
 
     private final Set<Long> registeredUser = new ConcurrentSkipListSet<>();
 
-    @BenchmarkStep(order = 0, description = "Truncate tables")
+//    @BenchmarkStep(order = 0, description = "Truncate tables")
     public void truncate() {
         if (!config.isStudentMode()) {
             return;
@@ -57,7 +57,7 @@ public class BenchmarkService {
         databaseService.truncate();
     }
 
-    @BenchmarkStep(order = 1, timeout = 35, description = "Import data")
+//    @BenchmarkStep(order = 1, timeout = 35, description = "Import data")
     public BenchmarkResult importData() {
         List<DanmuRecord> danmuRecords = deserialize(BenchmarkConstants.IMPORT_DATA, BenchmarkConstants.DANMU_RECORDS);
         List<UserRecord> userRecords = deserialize(BenchmarkConstants.IMPORT_DATA, BenchmarkConstants.USER_RECORDS);
