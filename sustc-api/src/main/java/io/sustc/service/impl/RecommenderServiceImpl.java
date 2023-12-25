@@ -55,7 +55,7 @@ public class RecommenderServiceImpl implements RecommenderService {
                     "WHERE video_watched_BV != ? " +
                     "AND user_watched_Mid IN (SELECT user_watched_Mid FROM watched_relation WHERE video_watched_BV = ?) " +
                     "GROUP BY video_watched_BV " +
-                    "ORDER BY similarity DESC " +
+                    "ORDER BY similarity DESC, video_watched_BV ASC " +
                     "LIMIT 5";
 
             try (Connection conn = dataSource.getConnection();
@@ -194,7 +194,7 @@ public class RecommenderServiceImpl implements RecommenderService {
             String sql = "SELECT v.BV " +
                     "FROM videos v " +
                     "JOIN (SELECT video_watched_BV FROM watched_relation WHERE user_watched_Mid IN ( " +
-                    "SELECT user_Mid FROM following_relation fr1 " +
+                    "SELECT fr1.user_Mid FROM following_relation fr1 " +
                     "JOIN following_relation fr2 ON fr1.user_Mid = fr2.follow_Mid AND fr1.follow_Mid = fr2.user_Mid " +
                     "WHERE fr1.user_Mid = ?) " +
                     "AND video_watched_BV NOT IN (SELECT video_watched_BV FROM watched_relation WHERE user_watched_Mid = ?) " +

@@ -408,7 +408,6 @@ public class VideoServiceImpl implements VideoService{
             }
         } catch (SQLException e) {
             e.printStackTrace();
-            // 在生产环境中，应该使用日志记录异常信息，而不是打印堆栈跟踪
         }
         // 如果没有找到视频或发生异常，返回 false
         return false;
@@ -434,7 +433,6 @@ public class VideoServiceImpl implements VideoService{
             }
         } catch (SQLException e) {
             e.printStackTrace();
-            // 在生产环境中，应该使用日志记录异常信息，而不是打印堆栈跟踪
         }
         // 如果没有找到视频或发生异常，返回 false
         return false;
@@ -583,7 +581,6 @@ public class VideoServiceImpl implements VideoService{
             }
         } catch (SQLException e) {
             e.printStackTrace();
-            // 在生产环境中，应该使用日志记录异常信息，而不是打印堆栈跟踪
         }
         // 如果没有找到视频或发生异常，返回 false
         return false;
@@ -615,7 +612,6 @@ public class VideoServiceImpl implements VideoService{
             }
         } catch (SQLException e) {
             e.printStackTrace();
-            // 在生产环境中，应该使用日志记录异常信息，而不是打印堆栈跟踪
         }
         return null;
     }
@@ -752,7 +748,6 @@ public class VideoServiceImpl implements VideoService{
             }
         } catch (SQLException e) {
             e.printStackTrace();
-            // 在生产环境中，应该使用日志记录异常信息，而不是打印堆栈跟踪
         }
         // 如果没有找到视频或发生异常，返回 -1
         return -1;
@@ -812,8 +807,6 @@ public class VideoServiceImpl implements VideoService{
             }
             return hotspots;
         } catch (SQLException e) {
-            e.printStackTrace();
-            // 在生产环境中，应该使用日志记录异常信息，而不是打印堆栈跟踪
         }
         // 如果发生异常，返回空集合
         return Collections.emptySet();
@@ -866,7 +859,6 @@ public class VideoServiceImpl implements VideoService{
             return rowsAffected > 0;
         } catch (SQLException e) {
             e.printStackTrace();
-            // 在生产环境中，应该使用日志记录异常信息
         }
         return false;
     }
