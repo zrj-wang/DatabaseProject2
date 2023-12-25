@@ -555,22 +555,71 @@ public class UserServiceImpl implements UserService {
             return false;
         }
 
-        String sql = "DELETE FROM Users WHERE mid = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        Connection conn = null;
+        try {
+            // 尝试获取数据库连接
+            conn = dataSource.getConnection();
+            // 关闭自动提交，以启用事务
+            conn.setAutoCommit(false);
 
-            // 设置删除操作的参数
-            pstmt.setLong(1, mid);
+            // 删除与用户相关联的数据
+            deleteRelatedData(conn, mid, "danmu", "danmu_Mid");
+            deleteRelatedData(conn, mid, "following_relation", "user_Mid");
+            deleteRelatedData(conn, mid, "following_relation", "follow_Mid");
+            deleteRelatedData(conn, mid, "liked_relation", "user_like_Mid");
+            deleteRelatedData(conn, mid, "coin_relation", "user_coin_Mid");
+            deleteRelatedData(conn, mid, "watched_relation", "user_watched_Mid");
+            deleteRelatedData(conn, mid, "favorite_relation", "user_favorite_Mid");
 
-            // 执行删除操作
-            int rowsAffected = pstmt.executeUpdate();
-            return rowsAffected > 0; // 如果至少有一行被删除，则返回 true
+            // 删除用户上传的视频
+            deleteRelatedData(conn, mid, "videos", "owner_Mid");
+
+            // 删除用户本身
+            String sql = "DELETE FROM Users WHERE mid = ?";
+            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                pstmt.setLong(1, mid);
+                int rowsAffected = pstmt.executeUpdate();
+                // 检查是否有行被影响
+                if (rowsAffected > 0) {
+                    conn.commit(); // 如果成功，提交事务
+                    return true;
+                } else {
+                    conn.rollback(); // 如果没有行被影响，回滚事务
+                    return false;
+                }
+            }
+
         } catch (SQLException e) {
+            // 异常处理
             e.printStackTrace();
+            if (conn != null) {
+                try {
+                    conn.rollback(); // 在异常情况下回滚事务
+                } catch (SQLException ex) {
+                    ex.printStackTrace();
+                }
+            }
+            return false;
+        } finally {
+            // 最终关闭连接
+            if (conn != null) {
+                try {
+                    conn.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
         }
-        // 如果没有删除成功或发生异常，返回 false
-        return false;
     }
+
+    private void deleteRelatedData(Connection conn, long mid, String tableName, String columnName) throws SQLException {
+        String sql = "DELETE FROM " + tableName + " WHERE " + columnName + " = ?";
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setLong(1, mid);
+            pstmt.executeUpdate();
+        }
+    }
+
     public boolean follow(AuthInfo auth, long followeeMid) {
         // 验证 auth 是否有效
         if (!isValidAuth(auth)) {
@@ -582,83 +631,87 @@ public class UserServiceImpl implements UserService {
             return false;
         }
 
-        try (Connection conn = dataSource.getConnection()) {
+        Connection conn = null;
+        PreparedStatement checkStmt = null;
+        PreparedStatement modifyStmt = null;
+        ResultSet rs = null;
+
+        try {
+            conn = dataSource.getConnection();
             // 检查当前用户是否已关注目标用户
             String checkSql = "SELECT COUNT(*) FROM following_relation WHERE user_Mid = ? AND follow_Mid = ?";
-            try (PreparedStatement checkStmt = conn.prepareStatement(checkSql)) {
-                checkStmt.setLong(1, auth.getMid());
-                checkStmt.setLong(2, followeeMid);
+            checkStmt = conn.prepareStatement(checkSql);
+            checkStmt.setLong(1, auth.getMid());
+            checkStmt.setLong(2, followeeMid);
 
-                ResultSet rs = checkStmt.executeQuery();
-                if (rs.next() && rs.getInt(1) > 0) {
-                    // 如果已经关注，则取消关注
-                    String deleteSql = "DELETE FROM following_relation WHERE user_Mid = ? AND follow_Mid = ?";
-                    try (PreparedStatement deleteStmt = conn.prepareStatement(deleteSql)) {
-                        deleteStmt.setLong(1, auth.getMid());
-                        deleteStmt.setLong(2, followeeMid);
-                        deleteStmt.executeUpdate();
-                        return false; // 关注已取消
-                    }
-                } else {
-                    // 如果尚未关注，则添加关注
-                    String insertSql = "INSERT INTO following_relation (user_Mid, follow_Mid) VALUES (?, ?)";
-                    try (PreparedStatement insertStmt = conn.prepareStatement(insertSql)) {
-                        insertStmt.setLong(1, auth.getMid());
-                        insertStmt.setLong(2, followeeMid);
-                        insertStmt.executeUpdate();
-                        return true; // 关注成功
-                    }
-                }
+            rs = checkStmt.executeQuery();
+            if (rs.next() && rs.getInt(1) > 0) {
+                // 如果已经关注，则取消关注
+                String deleteSql = "DELETE FROM following_relation WHERE user_Mid = ? AND follow_Mid = ?";
+                modifyStmt = conn.prepareStatement(deleteSql);
+                modifyStmt.setLong(1, auth.getMid());
+                modifyStmt.setLong(2, followeeMid);
+                modifyStmt.executeUpdate();
+                return false; // 关注已取消
+            } else {
+                // 如果尚未关注，则添加关注
+                String insertSql = "INSERT INTO following_relation (user_Mid, follow_Mid) VALUES (?, ?)";
+                modifyStmt = conn.prepareStatement(insertSql);
+                modifyStmt.setLong(1, auth.getMid());
+                modifyStmt.setLong(2, followeeMid);
+                modifyStmt.executeUpdate();
+                return true; // 关注成功
             }
         } catch (SQLException e) {
             e.printStackTrace();
-        }
-        return false;
-    }
-    public UserInfoResp getUserInfo(long mid) {
-        Future<UserInfoResp> future = executorService.submit(() -> {
-// 检查 mid 是否有效
-            if (mid <= 0) {
-                return null;
-            }
-
-            UserInfoResp userInfo = new UserInfoResp();
-            userInfo.setMid(mid);
-
-            try (Connection conn = dataSource.getConnection()) {
-                // 填充 coin
-                userInfo.setCoin(getUserCoin(conn, mid));
-
-                // 填充 following, follower, watched, liked, collected, posted
-                userInfo.setFollowing(getFollowing(conn, mid));
-                userInfo.setFollower(getFollowers(conn, mid));
-                userInfo.setWatched(getWatchedVideos(conn, mid));
-                userInfo.setLiked(getLikedVideos(conn, mid));
-                userInfo.setCollected(getCollectedVideos(conn, mid));
-                userInfo.setPosted(getPostedVideos(conn, mid));
-
-                return userInfo; // 返回用户信息
+        } finally {
+            // 关闭资源
+            try {
+                if (rs != null) {
+                    rs.close();
+                }
+                if (checkStmt != null) {
+                    checkStmt.close();
+                }
+                if (modifyStmt != null) {
+                    modifyStmt.close();
+                }
+                if (conn != null) {
+                    conn.close();
+                }
             } catch (SQLException e) {
                 e.printStackTrace();
             }
-            return null; // 如果发生异常，返回 null
+        }
+        return false;
+    }
 
-        });
-
-        try {
-            // 等待异步执行完成并获取结果
-            return future.get();
-        } catch (InterruptedException | ExecutionException e) {
-            // 异常处理
-            log.error("Error occurred when getUserInfo", e);
-            Thread.currentThread().interrupt(); // 重置中断状态
-            return null;
+    public UserInfoResp getUserInfo(long mid) {
+        // 使用提供的 userExists 方法来检查用户是否存在
+        if (!userExists(mid)) {
+            return null; // 如果用户不存在，直接返回 null
         }
 
+        UserInfoResp userInfo = new UserInfoResp();
+        userInfo.setMid(mid);
 
+        try (Connection conn = dataSource.getConnection()) {
+            // 填充用户信息
+            userInfo.setCoin(getUserCoin(conn, mid));
+            userInfo.setFollowing(getFollowing(conn, mid));
+            userInfo.setFollower(getFollowers(conn, mid));
+            userInfo.setWatched(getWatchedVideos(conn, mid));
+            userInfo.setLiked(getLikedVideos(conn, mid));
+            userInfo.setCollected(getCollectedVideos(conn, mid));
+            userInfo.setPosted(getPostedVideos(conn, mid));
 
-
+            return userInfo; // 返回用户信息
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null; // 如果发生异常，返回 null
     }
+
     private int getUserCoin(Connection conn, long mid) {
         String sql = "SELECT coin FROM Users WHERE mid = ?";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -737,7 +790,7 @@ public class UserServiceImpl implements UserService {
         return new String[0]; // 如果找不到用户或发生异常，返回空数组
     }
     private String[] getCollectedVideos(Connection conn, long mid) {
-        String sql = "SELECT bv FROM collected_relation WHERE user_Mid = ?";
+        String sql = "SELECT video_favorite_BV FROM favorite_relation WHERE user_favorite_Mid = ?";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setLong(1, mid);
             ResultSet rs = pstmt.executeQuery();
@@ -753,7 +806,7 @@ public class UserServiceImpl implements UserService {
         return new String[0]; // 如果找不到用户或发生异常，返回空数组
     }
     private String[] getPostedVideos(Connection conn, long mid) {
-        String sql = "SELECT bv FROM posted_relation WHERE user_Mid = ?";
+        String sql = "SELECT BV FROM videos WHERE owner_Mid = ?";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setLong(1, mid);
             ResultSet rs = pstmt.executeQuery();
