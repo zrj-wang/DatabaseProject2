@@ -32,7 +32,7 @@ public class DanmuServiceImpl implements DanmuService {
 
     private ExecutorService executorService;
 
-    // 类构造函数或者 @PostConstruct 初始化方法中初始化线程池
+
     @PostConstruct
     public void init() {
         executorService = Executors.newFixedThreadPool(10);

@@ -616,7 +616,7 @@ public class VideoServiceImpl implements VideoService{
             return bvList;
         } catch (SQLException e) {
             e.printStackTrace();
-            // 在生产环境中，应该使用日志记录异常信息，而不是打印堆栈跟踪
+
         }
         // 如果没有找到视频或发生异常，返回 null
         return null;
