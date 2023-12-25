@@ -32,7 +32,7 @@ public class DanmuServiceImpl implements DanmuService {
 
     private ExecutorService executorService;
 
-    // 类构造函数或者 @PostConstruct 初始化方法中初始化线程池
+
     @PostConstruct
     public void init() {
         executorService = Executors.newFixedThreadPool(10);
@@ -76,10 +76,6 @@ public class DanmuServiceImpl implements DanmuService {
 
             return -1;
         }
-
-
-
-
     }
 
 
@@ -120,7 +116,6 @@ public class DanmuServiceImpl implements DanmuService {
         } catch (SQLException e) {
             e.printStackTrace();
         } finally {
-            // 关闭连接、语句和结果集
             if (rs != null) {
                 try {
                     rs.close();

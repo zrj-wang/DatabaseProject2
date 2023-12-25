@@ -703,8 +703,10 @@ public class VideoServiceImpl implements VideoService{
             }
         } catch (SQLException e) {
             e.printStackTrace();
-            // 在生产环境中，应该使用日志记录异常信息
+
+
             return null;
+
         }
 
         return bvList;
