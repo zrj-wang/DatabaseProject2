@@ -17,11 +17,17 @@ import java.util.ArrayList;
 import java.util.List;
 //zrj-wang
 
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+
+import java.util.concurrent.TimeUnit;
 
 @Service
 @Slf4j
@@ -33,16 +39,50 @@ public class DanmuServiceImpl implements DanmuService {
     private ExecutorService executorService;
 
 
-    @PostConstruct
-    public void init() {
-        executorService = Executors.newFixedThreadPool(10);
-    }
+//    @PostConstruct
+//    public void init() {
+//        executorService = Executors.newFixedThreadPool(10);
+//    }
+//
+//    private Cache<Long, Boolean> authCache = CacheBuilder.newBuilder()
+//            .maximumSize(1000)
+//            .expireAfterWrite(30, TimeUnit.MINUTES)
+//            .build();//创建缓存实例
+//
+//    private Cache<WatchedKey, Boolean> watchedVideoCache = CacheBuilder.newBuilder()
+//            .maximumSize(1000)
+//            .expireAfterWrite(1, TimeUnit.HOURS)
+//            .build();
+
+//    private static class WatchedKey {
+//        private final long mid;
+//        private final String bv;
+//
+//        WatchedKey(long mid, String bv) {
+//            this.mid = mid;
+//            this.bv = bv;
+//        }
+//
+//        @Override
+//        public boolean equals(Object o) {
+//            if (this == o) return true;
+//            if (o == null || getClass() != o.getClass()) return false;
+//            WatchedKey that = (WatchedKey) o;
+//            return mid == that.mid && Objects.equals(bv, that.bv);
+//        }
+//
+//        @Override
+//        public int hashCode() {
+//            return Objects.hash(mid, bv);
+//        }
+//    }
 
 
     @Override
     public long sendDanmu(AuthInfo auth, String bv, String content, float time) {
 
-        Future<Long> future = executorService.submit(() -> {
+
+//        Future<Long> future = executorService.submit(() -> {
             if (auth == null || !isValidAuth(auth)) {
                 return -1L;
             }
@@ -65,250 +105,100 @@ public class DanmuServiceImpl implements DanmuService {
 
             return insertDanmu(bv, auth.getMid(), content, time);
 
-        });
-
-        try {
-
-            return future.get();
-        } catch (InterruptedException  | ExecutionException e) {
-            log.error("Error occurred while sending danmu", e);
-            Thread.currentThread().interrupt();
-
-            return -1;
-        }
+//        });
+//
+//        try {
+//
+//            return future.get();
+//        } catch (InterruptedException  | ExecutionException e) {
+//            log.error("Error occurred while sending danmu", e);
+//            Thread.currentThread().interrupt();
+//
+//            return -1;
+//        }
     }
 
 
 
-    //检查用户认证信息是否有效
-    private boolean isValidAuth(AuthInfo auth) {
-        String sql = "SELECT password, qq, wechat FROM Users WHERE mid = ?";
-        Connection conn = null;
-        PreparedStatement pstmt = null;
+
+    private Long getMidFromAuthInfo(AuthInfo auth) {
+        String sql = null;
         ResultSet rs = null;
 
-        try {
-            conn = dataSource.getConnection();
-            pstmt = conn.prepareStatement(sql);
-            pstmt.setLong(1, auth.getMid());
-            rs = pstmt.executeQuery();
+        try (Connection conn = dataSource.getConnection()) {
+            PreparedStatement pstmt;
 
-            if (rs.next()) {
-                String storedPassword = rs.getString("password");
-                String encryptedInputPassword = hashPasswordWithSHA256(auth.getPassword());
-                boolean isPasswordValid = encryptedInputPassword.equals(storedPassword);
-
-                if (!isPasswordValid) {
-                    return false;
-                }
-
-                String storedQQ = rs.getString("qq");
-                String storedWechat = rs.getString("wechat");
-
-                boolean isQQValid = auth.getQq() == null || auth.getQq().equals(storedQQ);
-                boolean isWechatValid = auth.getWechat() == null || auth.getWechat().equals(storedWechat);
-
-                return isQQValid && isWechatValid;
+            if (auth.getQq() != null) {
+                sql = "SELECT mid FROM Users WHERE qq = ?";
+                pstmt = conn.prepareStatement(sql);
+                pstmt.setString(1, auth.getQq());
+            } else if (auth.getWechat() != null) {
+                sql = "SELECT mid FROM Users WHERE wechat = ?";
+                pstmt = conn.prepareStatement(sql);
+                pstmt.setString(1, auth.getWechat());
             } else {
-                // mid不存在，检查qq和wechat
-                return checkQQWechat(auth);
+                return null; // 没有足够的认证信息
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        } finally {
-            if (rs != null) {
-                try {
-                    rs.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (pstmt != null) {
-                try {
-                    pstmt.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (conn != null) {
-                try {
-                    conn.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
 
-        return false;
-    }
-
-
-    private boolean checkQQWechat(AuthInfo auth) {
-        if (auth.getQq() != null && auth.getWechat() != null) {
-            // 检查是否存在一个用户同时拥有这个qq和wechat
-            return checkUserWithBoth(auth.getQq(), auth.getWechat());
-        } else if (auth.getQq() != null) {
-            // 检查是否存在拥有这个qq的用户
-            return checkUserWithQQ(auth.getQq());
-        } else if (auth.getWechat() != null) {
-            // 检查是否存在拥有这个wechat的用户
-            return checkUserWithWechat(auth.getWechat());
-        }
-        return false;
-    }
-
-// 实现 checkUserWithQQ, checkUserWithWechat, checkUserWithBoth 方法来检查数据库
-private boolean checkUserWithQQ(String qq) {
-    if (qq == null || qq.trim().isEmpty()) {
-        return false;
-    }
-    String sql = "SELECT COUNT(*) FROM Users WHERE qq = ?";
-    Connection conn = null;
-    PreparedStatement pstmt = null;
-    ResultSet rs = null;
-
-    try {
-        conn = dataSource.getConnection();
-        pstmt = conn.prepareStatement(sql);
-        pstmt.setString(1, qq);
-        rs = pstmt.executeQuery();
-
-        if (rs.next()) {
-            return rs.getInt(1) > 0;
-        }
-    } catch (SQLException e) {
-        e.printStackTrace();
-    } finally {
-        // 关闭连接、语句和结果集
-        if (rs != null) {
-            try {
-                rs.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        }
-        if (pstmt != null) {
-            try {
-                pstmt.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        }
-        if (conn != null) {
-            try {
-                conn.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    return false;
-}
-
-
-
-
-    private boolean checkUserWithWechat(String wechat) {
-        if (wechat == null || wechat.trim().isEmpty()) {
-            return false;
-        }
-        String sql = "SELECT COUNT(*) FROM Users WHERE wechat = ?";
-        Connection conn = null;
-        PreparedStatement pstmt = null;
-        ResultSet rs = null;
-
-        try {
-            conn = dataSource.getConnection();
-            pstmt = conn.prepareStatement(sql);
-            pstmt.setString(1, wechat);
             rs = pstmt.executeQuery();
 
             if (rs.next()) {
-                return rs.getInt(1) > 0;
+                return rs.getLong("mid");
             }
         } catch (SQLException e) {
             e.printStackTrace();
-        } finally {
-            // 关闭连接、语句和结果集
-            if (rs != null) {
-                try {
-                    rs.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (pstmt != null) {
-                try {
-                    pstmt.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (conn != null) {
-                try {
-                    conn.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
         }
 
-        return false;
+        return null;
     }
 
 
-
-    private boolean checkUserWithBoth(String qq, String wechat) {
-        if (qq == null || qq.trim().isEmpty() || wechat == null || wechat.trim().isEmpty()) {
-            return false;
-        }
-        String sql = "SELECT COUNT(*) FROM Users WHERE qq = ? AND wechat = ?";
-        Connection conn = null;
-        PreparedStatement pstmt = null;
+    private boolean isValidAuth(AuthInfo auth) {
+        String sql = null;
         ResultSet rs = null;
 
-        try {
-            conn = dataSource.getConnection();
-            pstmt = conn.prepareStatement(sql);
-            pstmt.setString(1, qq);
-            pstmt.setString(2, wechat);
+        try (Connection conn = dataSource.getConnection()) {
+            PreparedStatement pstmt;
+
+            if (auth.getMid() != 0 && auth.getPassword() != null) {
+                // 情况1：提供了 mid 和密码
+                sql = "SELECT password FROM Users WHERE mid = ?";
+                pstmt = conn.prepareStatement(sql);
+                pstmt.setLong(1, auth.getMid());
+            } else if (auth.getQq() != null) {
+                // 情况2：仅提供了 qq
+                sql = "SELECT COUNT(*) FROM Users WHERE qq = ?";
+                pstmt = conn.prepareStatement(sql);
+                pstmt.setString(1, auth.getQq());
+            } else if (auth.getWechat() != null) {
+                // 情况3：仅提供了 wechat
+                sql = "SELECT COUNT(*) FROM Users WHERE wechat = ?";
+                pstmt = conn.prepareStatement(sql);
+                pstmt.setString(1, auth.getWechat());
+            } else {
+                return false; // 没有提供足够的认证信息
+            }
+
             rs = pstmt.executeQuery();
 
             if (rs.next()) {
-                return rs.getInt(1) > 0;
+                if (auth.getMid() != 0 && auth.getPassword() != null) {
+                    // 验证密码
+                    String storedPassword = rs.getString("password");
+                    String encryptedInputPassword = hashPasswordWithSHA256(auth.getPassword());
+                    return encryptedInputPassword.equals(storedPassword);
+                } else {
+                    // 对于 qq 或 wechat，检查用户是否存在
+                    int count = rs.getInt(1);
+                    return count > 0;
+                }
             }
         } catch (SQLException e) {
             e.printStackTrace();
-        } finally {
-            // 关闭连接、语句和结果集
-            if (rs != null) {
-                try {
-                    rs.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (pstmt != null) {
-                try {
-                    pstmt.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (conn != null) {
-                try {
-                    conn.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
         }
 
         return false;
     }
-
-
 
 
 
@@ -334,7 +224,7 @@ private boolean checkUserWithQQ(String qq) {
         return false;
     }
 
-    private boolean hasWatchedVideo(long mid, String bv) {
+    private boolean queryHasWatchedVideoFromDB(long mid, String bv) {
 
         // 检查参数是否有效
         if (mid <= 0 || bv == null || bv.trim().isEmpty()) {
@@ -356,6 +246,16 @@ private boolean checkUserWithQQ(String qq) {
 
         return false;
     }
+
+
+    public boolean hasWatchedVideo(long mid, String bv) {
+
+     Boolean   watched = queryHasWatchedVideoFromDB(mid, bv);
+     return watched;
+
+    }
+
+
 
     private boolean isVideoPublished(String bv) {
 
@@ -464,12 +364,11 @@ private boolean checkUserWithQQ(String qq) {
         });
 
         try {
-            // 等待异步执行完成并获取结果
+
             return future.get();
         } catch (InterruptedException | ExecutionException e) {
-            // 异常处理
             log.error("Error occurred when displayDanmu", e);
-            Thread.currentThread().interrupt(); // 重置中断状态
+            Thread.currentThread().interrupt();
             return null;
         }
 
@@ -554,10 +453,8 @@ private boolean checkUserWithQQ(String qq) {
         });
 
         try {
-            // 等待异步执行完成并获取结果
             return future.get();
         } catch (InterruptedException | ExecutionException e) {
-            // 异常处理
             log.error("Error occurred when likeDanmu", e);
             Thread.currentThread().interrupt(); // 重置中断状态
             return false;

@@ -90,229 +90,80 @@ public class VideoServiceImpl implements VideoService{
     }
 
 
-    private boolean isValidAuth(AuthInfo auth) {
-        String sql = "SELECT password, qq, wechat FROM Users WHERE mid = ?";
-        Connection conn = null;
-        PreparedStatement pstmt = null;
+    private Long getMidFromAuthInfo(AuthInfo auth) {
+        String sql = null;
         ResultSet rs = null;
 
-        try {
-            conn = dataSource.getConnection();
-            pstmt = conn.prepareStatement(sql);
-            pstmt.setLong(1, auth.getMid());
-            rs = pstmt.executeQuery();
+        try (Connection conn = dataSource.getConnection()) {
+            PreparedStatement pstmt;
 
-            if (rs.next()) {
-                String storedPassword = rs.getString("password");
-                String encryptedInputPassword = hashPasswordWithSHA256(auth.getPassword());
-                boolean isPasswordValid = encryptedInputPassword.equals(storedPassword);
-
-                if (!isPasswordValid) {
-                    return false;
-                }
-
-                String storedQQ = rs.getString("qq");
-                String storedWechat = rs.getString("wechat");
-
-                boolean isQQValid = auth.getQq() == null || auth.getQq().equals(storedQQ);
-                boolean isWechatValid = auth.getWechat() == null || auth.getWechat().equals(storedWechat);
-
-                return isQQValid && isWechatValid;
+            if (auth.getQq() != null) {
+                sql = "SELECT mid FROM Users WHERE qq = ?";
+                pstmt = conn.prepareStatement(sql);
+                pstmt.setString(1, auth.getQq());
+            } else if (auth.getWechat() != null) {
+                sql = "SELECT mid FROM Users WHERE wechat = ?";
+                pstmt = conn.prepareStatement(sql);
+                pstmt.setString(1, auth.getWechat());
             } else {
-                // mid不存在，检查qq和wechat
-                return checkQQWechat(auth);
+                return null; // 没有足够的认证信息
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        } finally {
-            // 关闭连接、语句和结果集
-            if (rs != null) {
-                try {
-                    rs.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (pstmt != null) {
-                try {
-                    pstmt.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (conn != null) {
-                try {
-                    conn.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
 
-        return false;
-    }
-
-
-    private boolean checkQQWechat(AuthInfo auth) {
-        if (auth.getQq() != null && auth.getWechat() != null) {
-            // 检查是否存在一个用户同时拥有这个qq和wechat
-            return checkUserWithBoth(auth.getQq(), auth.getWechat());
-        } else if (auth.getQq() != null) {
-            // 检查是否存在拥有这个qq的用户
-            return checkUserWithQQ(auth.getQq());
-        } else if (auth.getWechat() != null) {
-            // 检查是否存在拥有这个wechat的用户
-            return checkUserWithWechat(auth.getWechat());
-        }
-        return false;
-    }
-
-    // 实现 checkUserWithQQ, checkUserWithWechat, checkUserWithBoth 方法来检查数据库
-    private boolean checkUserWithQQ(String qq) {
-        if (qq == null || qq.trim().isEmpty()) {
-            return false;
-        }
-        String sql = "SELECT COUNT(*) FROM Users WHERE qq = ?";
-        Connection conn = null;
-        PreparedStatement pstmt = null;
-        ResultSet rs = null;
-
-        try {
-            conn = dataSource.getConnection();
-            pstmt = conn.prepareStatement(sql);
-            pstmt.setString(1, qq);
             rs = pstmt.executeQuery();
 
             if (rs.next()) {
-                return rs.getInt(1) > 0;
+                return rs.getLong("mid");
             }
         } catch (SQLException e) {
             e.printStackTrace();
-        } finally {
-            // 关闭连接、语句和结果集
-            if (rs != null) {
-                try {
-                    rs.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (pstmt != null) {
-                try {
-                    pstmt.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (conn != null) {
-                try {
-                    conn.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
         }
 
-        return false;
+        return null;
     }
 
 
-
-
-    private boolean checkUserWithWechat(String wechat) {
-        if (wechat == null || wechat.trim().isEmpty()) {
-            return false;
-        }
-        String sql = "SELECT COUNT(*) FROM Users WHERE wechat = ?";
-        Connection conn = null;
-        PreparedStatement pstmt = null;
+    private boolean isValidAuth(AuthInfo auth) {
+        String sql = null;
         ResultSet rs = null;
 
-        try {
-            conn = dataSource.getConnection();
-            pstmt = conn.prepareStatement(sql);
-            pstmt.setString(1, wechat);
+        try (Connection conn = dataSource.getConnection()) {
+            PreparedStatement pstmt;
+
+            if (auth.getMid() != 0 && auth.getPassword() != null) {
+                // 情况1：提供了 mid 和密码
+                sql = "SELECT password FROM Users WHERE mid = ?";
+                pstmt = conn.prepareStatement(sql);
+                pstmt.setLong(1, auth.getMid());
+            } else if (auth.getQq() != null) {
+                // 情况2：仅提供了 qq
+                sql = "SELECT COUNT(*) FROM Users WHERE qq = ?";
+                pstmt = conn.prepareStatement(sql);
+                pstmt.setString(1, auth.getQq());
+            } else if (auth.getWechat() != null) {
+                // 情况3：仅提供了 wechat
+                sql = "SELECT COUNT(*) FROM Users WHERE wechat = ?";
+                pstmt = conn.prepareStatement(sql);
+                pstmt.setString(1, auth.getWechat());
+            } else {
+                return false; // 没有提供足够的认证信息
+            }
+
             rs = pstmt.executeQuery();
 
             if (rs.next()) {
-                return rs.getInt(1) > 0;
+                if (auth.getMid() != 0 && auth.getPassword() != null) {
+                    // 验证密码
+                    String storedPassword = rs.getString("password");
+                    String encryptedInputPassword = hashPasswordWithSHA256(auth.getPassword());
+                    return encryptedInputPassword.equals(storedPassword);
+                } else {
+                    // 对于 qq 或 wechat，检查用户是否存在
+                    int count = rs.getInt(1);
+                    return count > 0;
+                }
             }
         } catch (SQLException e) {
             e.printStackTrace();
-        } finally {
-            // 关闭连接、语句和结果集
-            if (rs != null) {
-                try {
-                    rs.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (pstmt != null) {
-                try {
-                    pstmt.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (conn != null) {
-                try {
-                    conn.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-
-        return false;
-    }
-
-
-
-    private boolean checkUserWithBoth(String qq, String wechat) {
-        if (qq == null || qq.trim().isEmpty() || wechat == null || wechat.trim().isEmpty()) {
-            return false;
-        }
-        String sql = "SELECT COUNT(*) FROM Users WHERE qq = ? AND wechat = ?";
-        Connection conn = null;
-        PreparedStatement pstmt = null;
-        ResultSet rs = null;
-
-        try {
-            conn = dataSource.getConnection();
-            pstmt = conn.prepareStatement(sql);
-            pstmt.setString(1, qq);
-            pstmt.setString(2, wechat);
-            rs = pstmt.executeQuery();
-
-            if (rs.next()) {
-                return rs.getInt(1) > 0;
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        } finally {
-            // 关闭连接、语句和结果集
-            if (rs != null) {
-                try {
-                    rs.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (pstmt != null) {
-                try {
-                    pstmt.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (conn != null) {
-                try {
-                    conn.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
         }
 
         return false;
@@ -408,7 +259,6 @@ public class VideoServiceImpl implements VideoService{
             }
         } catch (SQLException e) {
             e.printStackTrace();
-            // 在生产环境中，应该使用日志记录异常信息，而不是打印堆栈跟踪
         }
         // 如果没有找到视频或发生异常，返回 false
         return false;
@@ -434,7 +284,6 @@ public class VideoServiceImpl implements VideoService{
             }
         } catch (SQLException e) {
             e.printStackTrace();
-            // 在生产环境中，应该使用日志记录异常信息，而不是打印堆栈跟踪
         }
         // 如果没有找到视频或发生异常，返回 false
         return false;
@@ -583,7 +432,6 @@ public class VideoServiceImpl implements VideoService{
             }
         } catch (SQLException e) {
             e.printStackTrace();
-            // 在生产环境中，应该使用日志记录异常信息，而不是打印堆栈跟踪
         }
         // 如果没有找到视频或发生异常，返回 false
         return false;
@@ -615,7 +463,6 @@ public class VideoServiceImpl implements VideoService{
             }
         } catch (SQLException e) {
             e.printStackTrace();
-            // 在生产环境中，应该使用日志记录异常信息，而不是打印堆栈跟踪
         }
         return null;
     }
@@ -625,9 +472,10 @@ public class VideoServiceImpl implements VideoService{
 
     public List<String> searchVideo(AuthInfo auth, String keywords, int pageSize, int pageNum) {
         Future<List<String>> future = executorService.submit(() -> {
-            // 验证 auth 是否有效
-            if (!isValidAuth(auth)) {
-                return null;
+            // 验证 auth 是否有效，并从中获取用户的 mid
+            Long userId = getMidFromAuthInfo(auth);
+            if (userId == null) {
+                return null; // 用户认证无效或无法获取用户 ID
             }
 
             // 检查 keywords 是否无效
@@ -641,8 +489,7 @@ public class VideoServiceImpl implements VideoService{
             }
 
             // 执行搜索视频的操作
-            return performSearchVideo(keywords, pageSize, pageNum);
-
+            return performSearchVideo(keywords, pageSize, pageNum, userId);
         });
 
         try {
@@ -654,47 +501,56 @@ public class VideoServiceImpl implements VideoService{
             Thread.currentThread().interrupt(); // 重置中断状态
             return null;
         }
-
-
-
     }
 
-    private List<String> performSearchVideo(String keywords, int pageSize, int pageNum) {
+
+    private List<String> performSearchVideo(String keywords, int pageSize, int pageNum, long userId) {
         // 分割关键词
         String[] keywordArray = keywords.split("\\s+");
 
         // 构建基础查询
-        String baseQuery = "SELECT v.BV, ";
-        StringBuilder relevanceCalculation = new StringBuilder("0");
+        String baseQuery = "WITH split_keywords AS (" +
+                "SELECT unnest(string_to_array(LOWER(?), ' ')) AS keyword), " +
+                "views AS (" +
+                "SELECT video_watched_BV AS BV, COUNT(*) AS view_count " +
+                "FROM watched_relation " +
+                "GROUP BY video_watched_BV), " +
+                "keyword_search AS (" +
+                "SELECT v.BV, v.title, v.description, u.name AS owner_name, " +
+                "COALESCE(vws.view_count, 0) AS view_count, " +
+                "SUM(" +
+                "(ARRAY_LENGTH(STRING_TO_ARRAY(LOWER(v.title), LOWER(sk.keyword)), 1) - 1) + " +
+                "(ARRAY_LENGTH(STRING_TO_ARRAY(LOWER(v.description), LOWER(sk.keyword)), 1) - 1) + " +
+                "(ARRAY_LENGTH(STRING_TO_ARRAY(LOWER(u.name), LOWER(sk.keyword)), 1) - 1)" +
+                ") AS relevance " +
+                "FROM videos v " +
+                "JOIN users u ON v.owner_Mid = u.mid " +
+                "LEFT JOIN views vws ON v.BV = vws.BV, " +
+                "split_keywords sk " +
+                "WHERE " +
+                "(LOWER(v.title) LIKE '%' || LOWER(sk.keyword) || '%' " +
+                "OR LOWER(v.description) LIKE '%' || LOWER(sk.keyword) || '%' " +
+                "OR LOWER(u.name) LIKE '%' || LOWER(sk.keyword) || '%') " +
+                "AND " +
+                "((v.reviewer != 0 AND v.review_time IS NOT NULL AND v.public_time <= CURRENT_TIMESTAMP) " +
+                "OR u.mid = ?) " +
+                "GROUP BY v.BV, u.name, v.title, v.description, vws.view_count) " +
+                "SELECT k.BV, k.title, k.owner_name, k.description, k.relevance, k.view_count " +
+                "FROM keyword_search k " +
+                "WHERE k.relevance IS NOT NULL AND k.relevance > 0 " +
+                "ORDER BY k.relevance DESC, k.view_count DESC " +
+                "LIMIT ? OFFSET ?";
 
-        // 为每个关键词添加相关性计算
-        for (String keyword : keywordArray) {
-            relevanceCalculation.append(" + ")
-                    .append("LENGTH(v.title) - LENGTH(REPLACE(LOWER(v.title), LOWER('").append(keyword).append("'), ''))")
-                    .append("/LENGTH('").append(keyword).append("')")
-                    .append(" + ")
-                    .append("LENGTH(v.description) - LENGTH(REPLACE(LOWER(v.description), LOWER('").append(keyword).append("'), ''))")
-                    .append("/LENGTH('").append(keyword).append("')")
-                    .append(" + ")
-                    .append("LENGTH(u.name) - LENGTH(REPLACE(LOWER(u.name), LOWER('").append(keyword).append("'), ''))")
-                    .append("/LENGTH('").append(keyword).append("')");
-        }
-
-        String fromClause = " FROM videos v JOIN users u ON v.owner_Mid = u.mid LEFT JOIN watched_relation w ON v.BV = w.video_watched_BV ";
-        String groupByClause = " GROUP BY v.BV, u.name "; // 包括 u.name 在 GROUP BY 子句中
-        String orderByClause = " ORDER BY " + relevanceCalculation.toString() + " DESC, COUNT(w.video_watched_BV) DESC ";
-        String limitClause = " LIMIT ? OFFSET ?";
-
-        // 组合最终的 SQL 语句
-        String sql = baseQuery + relevanceCalculation.toString() + " AS relevance, COUNT(w.video_watched_BV) as view_count " + fromClause + groupByClause + orderByClause + limitClause;
 
         // 执行查询并处理结果
         List<String> bvList = new ArrayList<>();
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+             PreparedStatement pstmt = conn.prepareStatement(baseQuery)) {
 
-            pstmt.setInt(1, pageSize);
-            pstmt.setInt(2, (pageNum - 1) * pageSize);
+            pstmt.setString(1, keywords); // 第一个参数，关键字字符串
+            pstmt.setLong(2, userId); // 第二个参数，用户的 mid
+            pstmt.setInt(3, pageSize); // 第三个参数，页面大小
+            pstmt.setInt(4, (pageNum - 1) * pageSize); // 第四个参数，计算出的偏移量
 
             ResultSet rs = pstmt.executeQuery();
 
@@ -703,14 +559,13 @@ public class VideoServiceImpl implements VideoService{
             }
         } catch (SQLException e) {
             e.printStackTrace();
-
-
             return null;
-
         }
 
         return bvList;
     }
+
+
 
 
 
@@ -753,7 +608,6 @@ public class VideoServiceImpl implements VideoService{
             }
         } catch (SQLException e) {
             e.printStackTrace();
-            // 在生产环境中，应该使用日志记录异常信息，而不是打印堆栈跟踪
         }
         // 如果没有找到视频或发生异常，返回 -1
         return -1;
@@ -813,8 +667,6 @@ public class VideoServiceImpl implements VideoService{
             }
             return hotspots;
         } catch (SQLException e) {
-            e.printStackTrace();
-            // 在生产环境中，应该使用日志记录异常信息，而不是打印堆栈跟踪
         }
         // 如果发生异常，返回空集合
         return Collections.emptySet();
@@ -867,7 +719,6 @@ public class VideoServiceImpl implements VideoService{
             return rowsAffected > 0;
         } catch (SQLException e) {
             e.printStackTrace();
-            // 在生产环境中，应该使用日志记录异常信息
         }
         return false;
     }

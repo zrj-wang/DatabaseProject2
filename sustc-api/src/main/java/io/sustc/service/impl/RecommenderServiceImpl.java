@@ -30,16 +30,16 @@ public class RecommenderServiceImpl implements RecommenderService {
     @Autowired
     private DataSource dataSource;
     private ExecutorService executorService;
-    @PostConstruct
-    public void init() {
-        executorService = Executors.newFixedThreadPool(10);
-    }
-
+//    @PostConstruct
+//    public void init() {
+//        executorService = Executors.newFixedThreadPool(10);
+//    }
+//
 
     @Override
     public List<String> recommendNextVideo(String bv) {
         // 创建用于存储推荐视频 bv 的列表
-        Future<List<String>> future = executorService.submit(() -> {
+//        Future<List<String>> future = executorService.submit(() -> {
             List<String> recommendedVideos = new ArrayList<>();
             if (bv == null || bv.trim().isEmpty()) {
                 return null;
@@ -55,7 +55,7 @@ public class RecommenderServiceImpl implements RecommenderService {
                     "WHERE video_watched_BV != ? " +
                     "AND user_watched_Mid IN (SELECT user_watched_Mid FROM watched_relation WHERE video_watched_BV = ?) " +
                     "GROUP BY video_watched_BV " +
-                    "ORDER BY similarity DESC " +
+                    "ORDER BY similarity DESC, video_watched_BV ASC " +
                     "LIMIT 5";
 
             try (Connection conn = dataSource.getConnection();
@@ -77,23 +77,21 @@ public class RecommenderServiceImpl implements RecommenderService {
 
             return recommendedVideos;
 
-        });
+//        });
 
-        try {
-
-            return future.get();
-        } catch (InterruptedException  | ExecutionException e) {
-            log.error("Error occurred while recommendNextVideo", e);
-            Thread.currentThread().interrupt();
-            return null;
-        }
+//        try {
+//
+//            return future.get();
+//        } catch (InterruptedException  | ExecutionException e) {
+//            log.error("Error occurred while recommendNextVideo", e);
+//            Thread.currentThread().interrupt();
+//            return null;
+//        }
 
 
     }
 
     private boolean videoExists(String bv) {
-
-
 
         String sql = "SELECT COUNT(*) FROM videos WHERE BV = ?";
         try (Connection conn = dataSource.getConnection();
@@ -114,101 +112,106 @@ public class RecommenderServiceImpl implements RecommenderService {
 
 
 
-
-
-
-
-
-
-    //done
+    //wrong
     @Override
     public List<String> generalRecommendations(int pageSize, int pageNum) {
 
 
-        Future<List<String>> future = executorService.submit(() -> {
-            // 检查分页参数的有效性
-            if (pageSize <= 0 || pageNum <= 0) {
-                return null;
-            }
-
-            List<String> recommendedVideos = new ArrayList<>();
-            String sql = "SELECT v.BV, "
-                    + "COALESCE(LEAST(like_rate, 1), 0) AS like_rate, "
-                    + "COALESCE(LEAST(coin_rate, 1), 0) AS coin_rate, "
-                    + "COALESCE(LEAST(fav_rate, 1), 0) AS fav_rate, "
-                    + "COALESCE(danmu_avg, 0) AS danmu_avg, "
-                    + "COALESCE(finish_avg, 0) AS finish_avg, "
-                    + "(COALESCE(LEAST(like_rate, 1), 0) + COALESCE(LEAST(coin_rate, 1), 0) + COALESCE(LEAST(fav_rate, 1), 0) + COALESCE(danmu_avg, 0) + COALESCE(finish_avg, 0)) AS score "
-                    + "FROM videos v "
-                    + "LEFT JOIN (SELECT video_like_BV, COUNT(*) / NULLIF((SELECT COUNT(*) FROM watched_relation WHERE video_watched_BV = video_like_BV), 0) AS like_rate FROM liked_relation GROUP BY video_like_BV) lr ON v.BV = lr.video_like_BV "
-                    + "LEFT JOIN (SELECT video_coin_BV, COUNT(*) / NULLIF((SELECT COUNT(*) FROM watched_relation WHERE video_watched_BV = video_coin_BV), 0) AS coin_rate FROM coin_relation GROUP BY video_coin_BV) cr ON v.BV = cr.video_coin_BV "
-                    + "LEFT JOIN (SELECT video_favorite_BV, COUNT(*) / NULLIF((SELECT COUNT(*) FROM watched_relation WHERE video_watched_BV = video_favorite_BV), 0) AS fav_rate FROM favorite_relation GROUP BY video_favorite_BV) fr ON v.BV = fr.video_favorite_BV "
-                    + "LEFT JOIN (SELECT danmu_BV, AVG(danmu_count) AS danmu_avg FROM (SELECT danmu_BV, COUNT(*) AS danmu_count FROM danmu GROUP BY danmu_BV) danmu_grouped GROUP BY danmu_BV) dr ON v.BV = dr.danmu_BV "
-                    + "LEFT JOIN (SELECT video_watched_BV, AVG(watched_time / duration) AS finish_avg FROM watched_relation wr JOIN videos vs ON wr.video_watched_BV = vs.BV GROUP BY video_watched_BV) wr ON v.BV = wr.video_watched_BV "
-                    + "ORDER BY score DESC "
-                    + "LIMIT ? OFFSET ?";
-
-            try (Connection conn = dataSource.getConnection();
-                 PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
-                int offset = (pageNum - 1) * pageSize;
-                pstmt.setInt(1, pageSize);
-                pstmt.setInt(2, offset);
-
-                ResultSet rs = pstmt.executeQuery();
-                while (rs.next()) {
-                    String bv = rs.getString("BV");
-                    recommendedVideos.add(bv);
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-            return recommendedVideos;
-
-
-        });
-
-        try {
-            // 等待异步执行完成并获取结果
-            return future.get();
-        } catch (InterruptedException | ExecutionException e) {
-            // 异常处理
-            log.error("Error occurred when likeDanmu", e);
-            Thread.currentThread().interrupt(); // 重置中断状态
+//        Future<List<String>> future = executorService.submit(() -> {
+        // 检查分页参数的有效性
+        if (pageSize <= 0 || pageNum <= 0) {
             return null;
         }
+
+        List<String> recommendedVideos = new ArrayList<>();
+
+        String sql = "SELECT v.bv,"
+                +"COALESCE(like_rate,  0) AS like_rate,"
+        +"COALESCE(LEAST(coin_rate, 1), 0) AS coin_rate,"
+        +"COALESCE(LEAST(fav_rate, 1), 0) AS fav_rate,"
+        +"COALESCE(danmu_avg, 0) AS danmu_avg,"
+        +"COALESCE(finish_avg, 0) AS finish_avg,"
+        +"(COALESCE(LEAST(like_rate, 1), 0) + COALESCE(LEAST(coin_rate, 1), 0) + COALESCE(LEAST(fav_rate, 1), 0) + COALESCE(danmu_avg, 0) + COALESCE(finish_avg, 0)) AS score "
+        +"FROM videos v "
+        +"LEFT JOIN (SELECT video_like_BV, COUNT(*)*1. / NULLIF((SELECT COUNT(*) FROM watched_relation WHERE video_watched_BV = video_like_BV), 0) AS like_rate FROM liked_relation GROUP BY video_like_BV) lr ON v.BV = lr.video_like_BV "
+        +"LEFT JOIN (SELECT video_coin_BV, COUNT(*)*1. / NULLIF((SELECT COUNT(*) FROM watched_relation WHERE video_watched_BV = video_coin_BV), 0) AS coin_rate FROM coin_relation GROUP BY video_coin_BV) cr ON v.BV = cr.video_coin_BV "
+        +"LEFT JOIN (SELECT video_favorite_BV, COUNT(*) *1./ NULLIF((SELECT COUNT(*) FROM watched_relation WHERE video_watched_BV = video_favorite_BV), 0) AS fav_rate FROM favorite_relation GROUP BY video_favorite_BV) fr ON v.BV = fr.video_favorite_BV "
+        +"LEFT JOIN (SELECT danmu_BV, COUNT(*) *1./ NULLIF((select  count(*) from watched_relation where video_watched_BV = danmu_BV),0) as danmu_avg from  danmu group by danmu_BV) dr ON v.BV = dr.danmu_BV "
+        +"LEFT JOIN (SELECT video_watched_BV, AVG(watched_time / duration) AS finish_avg FROM watched_relation wr JOIN videos vs ON wr.video_watched_BV = vs.BV GROUP BY video_watched_BV) wr ON v.BV = wr.video_watched_BV "
+        +"ORDER BY score DESC "
+        +"LIMIT ? OFFSET ?";
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            int offset = (pageNum - 1) * pageSize;
+            pstmt.setInt(1, pageSize);
+            pstmt.setInt(2, offset);
+
+
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                String bv = rs.getString("BV");
+                recommendedVideos.add(bv);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return recommendedVideos;
+
     }
+//        });
+//
+//        try {
+//            // 等待异步执行完成并获取结果
+//            return future.get();
+//        } catch (InterruptedException | ExecutionException e) {
+//            // 异常处理
+//            log.error("Error occurred when likeDanmu", e);
+//            Thread.currentThread().interrupt(); // 重置中断状态
+//            return null;
+//        }
+
 
 
 
     @Override
     public List<String> recommendVideosForUser(AuthInfo auth, int pageSize, int pageNum) {
 
-        Future<List<String>> future = executorService.submit(() -> {
+//        Future<List<String>> future = executorService.submit(() -> {
             // 检查认证信息、分页参数的有效性
             if (auth == null || !isValidAuth(auth) || pageSize <= 0 || pageNum <= 0) {
                 return null;
             }
 
+        Long userMid = auth.getMid();
+        if (userMid == 0 && (auth.getQq() != null || auth.getWechat() != null)) {
+            userMid = getMidFromAuthInfo(auth);
+            if (userMid == null) {
+                return new ArrayList<>();
+            }
+        }
+
             List<String> recommendedVideos = new ArrayList<>();
-            String sql = "SELECT v.BV " +
-                    "FROM videos v " +
-                    "JOIN (SELECT video_watched_BV FROM watched_relation WHERE user_watched_Mid IN ( " +
-                    "SELECT user_Mid FROM following_relation fr1 " +
-                    "JOIN following_relation fr2 ON fr1.user_Mid = fr2.follow_Mid AND fr1.follow_Mid = fr2.user_Mid " +
-                    "WHERE fr1.user_Mid = ?) " +
-                    "AND video_watched_BV NOT IN (SELECT video_watched_BV FROM watched_relation WHERE user_watched_Mid = ?) " +
-                    "GROUP BY video_watched_BV) watched_videos ON v.BV = watched_videos.video_watched_BV " +
-                    "JOIN Users u ON v.owner_Mid = u.mid " +
-                    "ORDER BY COUNT(watched_videos.video_watched_BV) DESC, u.level DESC, v.public_time DESC " +
-                    "LIMIT ? OFFSET ?";
+            String sql = "SELECT v.BV "
+        +"FROM videos v "
+        +"JOIN (SELECT video_watched_BV FROM watched_relation WHERE user_watched_Mid IN ( "
+                +"SELECT fr2.user_Mid FROM following_relation fr1 "
+                +"JOIN following_relation fr2 ON fr1.user_Mid = fr2.follow_Mid AND fr1.follow_Mid = fr2.user_Mid "
+               +" WHERE fr1.user_Mid = ?) "
+        +"AND video_watched_BV NOT IN (SELECT video_watched_BV FROM watched_relation WHERE user_watched_Mid = ?) "
+        +"GROUP BY video_watched_BV) watched_videos ON v.BV = watched_videos.video_watched_BV "
+        +"JOIN Users u ON v.owner_Mid = u.mid "
+        +"GROUP BY v.BV, u.level, v.public_time "
+        +"ORDER BY COUNT(watched_videos.video_watched_BV) DESC, u.level DESC, v.public_time DESC "
+        +"LIMIT ? OFFSET ? ";
 
             try (Connection conn = dataSource.getConnection();
                  PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
                 int offset = (pageNum - 1) * pageSize;
-                pstmt.setLong(1, auth.getMid());
-                pstmt.setLong(2, auth.getMid());
+                pstmt.setLong(1, userMid);
+                pstmt.setLong(2, userMid);
                 pstmt.setInt(3, pageSize);
                 pstmt.setInt(4, offset);
 
@@ -230,247 +233,102 @@ public class RecommenderServiceImpl implements RecommenderService {
             return recommendedVideos;
 
 
-        });
+//        });
+//
+//        try {
+//            // 等待异步执行完成并获取结果
+//            return future.get();
+//        } catch (InterruptedException | ExecutionException e) {
+//            // 异常处理
+//            log.error("Error occurred when likeDanmu", e);
+//            Thread.currentThread().interrupt(); // 重置中断状态
+//            return null;
+//        }
+    }
 
-        try {
-            // 等待异步执行完成并获取结果
-            return future.get();
-        } catch (InterruptedException | ExecutionException e) {
-            // 异常处理
-            log.error("Error occurred when likeDanmu", e);
-            Thread.currentThread().interrupt(); // 重置中断状态
-            return null;
+
+
+
+    private Long getMidFromAuthInfo(AuthInfo auth) {
+        String sql = null;
+        ResultSet rs = null;
+
+        try (Connection conn = dataSource.getConnection()) {
+            PreparedStatement pstmt;
+
+            if (auth.getQq() != null) {
+                sql = "SELECT mid FROM Users WHERE qq = ?";
+                pstmt = conn.prepareStatement(sql);
+                pstmt.setString(1, auth.getQq());
+            } else if (auth.getWechat() != null) {
+                sql = "SELECT mid FROM Users WHERE wechat = ?";
+                pstmt = conn.prepareStatement(sql);
+                pstmt.setString(1, auth.getWechat());
+            } else {
+                return null; // 没有足够的认证信息
+            }
+
+            rs = pstmt.executeQuery();
+
+            if (rs.next()) {
+                return rs.getLong("mid");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
+
+        return null;
     }
 
 
     private boolean isValidAuth(AuthInfo auth) {
-        String sql = "SELECT password, qq, wechat FROM Users WHERE mid = ?";
-        Connection conn = null;
-        PreparedStatement pstmt = null;
+        String sql = null;
         ResultSet rs = null;
 
-        try {
-            conn = dataSource.getConnection();
-            pstmt = conn.prepareStatement(sql);
-            pstmt.setLong(1, auth.getMid());
-            rs = pstmt.executeQuery();
+        try (Connection conn = dataSource.getConnection()) {
+            PreparedStatement pstmt;
 
-            if (rs.next()) {
-                String storedPassword = rs.getString("password");
-                String encryptedInputPassword = hashPasswordWithSHA256(auth.getPassword());
-                boolean isPasswordValid = encryptedInputPassword.equals(storedPassword);
-
-                if (!isPasswordValid) {
-                    return false;
-                }
-
-                String storedQQ = rs.getString("qq");
-                String storedWechat = rs.getString("wechat");
-
-                boolean isQQValid = auth.getQq() == null || auth.getQq().equals(storedQQ);
-                boolean isWechatValid = auth.getWechat() == null || auth.getWechat().equals(storedWechat);
-
-                return isQQValid && isWechatValid;
+            if (auth.getMid() != 0 && auth.getPassword() != null) {
+                // 情况1：提供了 mid 和密码
+                sql = "SELECT password FROM Users WHERE mid = ?";
+                pstmt = conn.prepareStatement(sql);
+                pstmt.setLong(1, auth.getMid());
+            } else if (auth.getQq() != null) {
+                // 情况2：仅提供了 qq
+                sql = "SELECT COUNT(*) FROM Users WHERE qq = ?";
+                pstmt = conn.prepareStatement(sql);
+                pstmt.setString(1, auth.getQq());
+            } else if (auth.getWechat() != null) {
+                // 情况3：仅提供了 wechat
+                sql = "SELECT COUNT(*) FROM Users WHERE wechat = ?";
+                pstmt = conn.prepareStatement(sql);
+                pstmt.setString(1, auth.getWechat());
             } else {
-                // mid不存在，检查qq和wechat
-                return checkQQWechat(auth);
+                return false; // 没有提供足够的认证信息
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        } finally {
-            // 关闭连接、语句和结果集
-            if (rs != null) {
-                try {
-                    rs.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (pstmt != null) {
-                try {
-                    pstmt.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (conn != null) {
-                try {
-                    conn.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
 
-        return false;
-    }
-
-
-    private boolean checkQQWechat(AuthInfo auth) {
-        if (auth.getQq() != null && auth.getWechat() != null) {
-            // 检查是否存在一个用户同时拥有这个qq和wechat
-            return checkUserWithBoth(auth.getQq(), auth.getWechat());
-        } else if (auth.getQq() != null) {
-            // 检查是否存在拥有这个qq的用户
-            return checkUserWithQQ(auth.getQq());
-        } else if (auth.getWechat() != null) {
-            // 检查是否存在拥有这个wechat的用户
-            return checkUserWithWechat(auth.getWechat());
-        }
-        return false;
-    }
-
-    // 实现 checkUserWithQQ, checkUserWithWechat, checkUserWithBoth 方法来检查数据库
-    private boolean checkUserWithQQ(String qq) {
-        if (qq == null || qq.trim().isEmpty()) {
-            return false;
-        }
-        String sql = "SELECT COUNT(*) FROM Users WHERE qq = ?";
-        Connection conn = null;
-        PreparedStatement pstmt = null;
-        ResultSet rs = null;
-
-        try {
-            conn = dataSource.getConnection();
-            pstmt = conn.prepareStatement(sql);
-            pstmt.setString(1, qq);
             rs = pstmt.executeQuery();
 
             if (rs.next()) {
-                return rs.getInt(1) > 0;
+                if (auth.getMid() != 0 && auth.getPassword() != null) {
+                    // 验证密码
+                    String storedPassword = rs.getString("password");
+                    String encryptedInputPassword = hashPasswordWithSHA256(auth.getPassword());
+                    return encryptedInputPassword.equals(storedPassword);
+                } else {
+                    // 对于 qq 或 wechat，检查用户是否存在
+                    int count = rs.getInt(1);
+                    return count > 0;
+                }
             }
         } catch (SQLException e) {
             e.printStackTrace();
-        } finally {
-            // 关闭连接、语句和结果集
-            if (rs != null) {
-                try {
-                    rs.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (pstmt != null) {
-                try {
-                    pstmt.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (conn != null) {
-                try {
-                    conn.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
         }
 
         return false;
     }
 
 
-
-
-    private boolean checkUserWithWechat(String wechat) {
-        if (wechat == null || wechat.trim().isEmpty()) {
-            return false;
-        }
-        String sql = "SELECT COUNT(*) FROM Users WHERE wechat = ?";
-        Connection conn = null;
-        PreparedStatement pstmt = null;
-        ResultSet rs = null;
-
-        try {
-            conn = dataSource.getConnection();
-            pstmt = conn.prepareStatement(sql);
-            pstmt.setString(1, wechat);
-            rs = pstmt.executeQuery();
-
-            if (rs.next()) {
-                return rs.getInt(1) > 0;
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        } finally {
-            // 关闭连接、语句和结果集
-            if (rs != null) {
-                try {
-                    rs.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (pstmt != null) {
-                try {
-                    pstmt.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (conn != null) {
-                try {
-                    conn.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-
-        return false;
-    }
-
-
-
-    private boolean checkUserWithBoth(String qq, String wechat) {
-        if (qq == null || qq.trim().isEmpty() || wechat == null || wechat.trim().isEmpty()) {
-            return false;
-        }
-        String sql = "SELECT COUNT(*) FROM Users WHERE qq = ? AND wechat = ?";
-        Connection conn = null;
-        PreparedStatement pstmt = null;
-        ResultSet rs = null;
-
-        try {
-            conn = dataSource.getConnection();
-            pstmt = conn.prepareStatement(sql);
-            pstmt.setString(1, qq);
-            pstmt.setString(2, wechat);
-            rs = pstmt.executeQuery();
-
-            if (rs.next()) {
-                return rs.getInt(1) > 0;
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        } finally {
-            // 关闭连接、语句和结果集
-            if (rs != null) {
-                try {
-                    rs.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (pstmt != null) {
-                try {
-                    pstmt.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (conn != null) {
-                try {
-                    conn.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-
-        return false;
-    }
 
 
 
@@ -483,53 +341,62 @@ public class RecommenderServiceImpl implements RecommenderService {
         if (auth == null || !isValidAuth(auth) || pageSize <= 0 || pageNum <= 0) {
             return null;
         }
-        Future<List<Long>> future = executorService.submit(() -> {
-            List<Long> recommendedUserIds = new ArrayList<>();
-            String sql = "SELECT fr2.user_Mid, COUNT(*) as common_followings, u.level " +
-                    "FROM following_relation fr1 " +
-                    "JOIN following_relation fr2 ON fr1.follow_Mid = fr2.follow_Mid AND fr1.user_Mid != fr2.user_Mid " +
-                    "JOIN Users u ON fr2.user_Mid = u.mid " +
-                    "WHERE fr1.user_Mid = ? AND fr2.user_Mid NOT IN (SELECT follow_Mid FROM following_relation WHERE user_Mid = ?) " +
-                    "GROUP BY fr2.user_Mid, u.level " +
-                    "ORDER BY common_followings DESC, u.level, fr2.user_Mid ASC " +
-                    "LIMIT ? OFFSET ?";
 
-            try (Connection conn = dataSource.getConnection();
-                 PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
-                int offset = (pageNum - 1) * pageSize;
-                pstmt.setLong(1, auth.getMid());
-                pstmt.setLong(2, auth.getMid());
-                pstmt.setInt(3, pageSize);
-                pstmt.setInt(4, offset);
-
-                ResultSet rs = pstmt.executeQuery();
-                while (rs.next()) {
-                    Long userId = rs.getLong("user_Mid");
-                    recommendedUserIds.add(userId);
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-                return null;
+        Long userMid = auth.getMid();
+        if (userMid == 0 && (auth.getQq() != null || auth.getWechat() != null)) {
+            userMid = getMidFromAuthInfo(auth);
+            if (userMid == null) {
+                return new ArrayList<>();
             }
+        }
 
-            return recommendedUserIds.isEmpty() ? new ArrayList<>() : recommendedUserIds;
+//        Future<List<Long>> future = executorService.submit(() -> {
+        List<Long> recommendedUserIds = new ArrayList<>();
+        String sql = "SELECT fr2.user_Mid, COUNT(*) as common_followings, u.level " +
+                "FROM following_relation fr1 " +
+                "JOIN following_relation fr2 ON fr1.follow_Mid = fr2.follow_Mid AND fr1.user_Mid != fr2.user_Mid " +
+                "JOIN Users u ON fr2.user_Mid = u.mid " +
+                "WHERE fr1.user_Mid = ? AND fr2.user_Mid NOT IN (SELECT follow_Mid FROM following_relation WHERE user_Mid = ?) " +
+                "GROUP BY fr2.user_Mid, u.level " +
+                "ORDER BY common_followings DESC, u.level DESC, fr2.user_Mid ASC " +
+                "LIMIT ? OFFSET ?";
+//
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
+            int offset = (pageNum - 1) * pageSize;
+            pstmt.setLong(1, userMid);
+            pstmt.setLong(2, userMid);
+            pstmt.setInt(3, pageSize);
+            pstmt.setInt(4, offset);
 
-        });
-
-        try {
-            // 等待异步执行完成并获取结果
-            return future.get();
-        } catch (InterruptedException | ExecutionException e) {
-            // 异常处理
-            log.error("Error occurred when likeDanmu", e);
-            Thread.currentThread().interrupt(); // 重置中断状态
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                Long userId = rs.getLong("user_Mid");
+                recommendedUserIds.add(userId);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
             return null;
         }
 
+        return recommendedUserIds.isEmpty() ? new ArrayList<>() : recommendedUserIds;
 
     }
+//        });
+
+//        try {
+//            // 等待异步执行完成并获取结果
+//            return future.get();
+//        } catch (InterruptedException | ExecutionException e) {
+//            // 异常处理
+//            log.error("Error occurred when likeDanmu", e);
+//            Thread.currentThread().interrupt(); // 重置中断状态
+//            return null;
+//        }
+
+
+
     private String hashPasswordWithSHA256(String password) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
