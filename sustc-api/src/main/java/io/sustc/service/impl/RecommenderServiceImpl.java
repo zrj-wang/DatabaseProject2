@@ -173,18 +173,49 @@ public class RecommenderServiceImpl implements RecommenderService {
 //        }
 
 
+    private int getTotalVideoCount(Long userMid) {
+        int totalVideos = 0;
+        String sql = "SELECT COUNT(DISTINCT v.BV) " +
+                "FROM videos v " +
+                "JOIN (SELECT video_watched_BV FROM watched_relation WHERE user_watched_Mid IN ( " +
+                "SELECT fr2.user_Mid FROM following_relation fr1 " +
+                "JOIN following_relation fr2 ON fr1.user_Mid = fr2.follow_Mid AND fr1.follow_Mid = fr2.user_Mid " +
+                "WHERE fr1.user_Mid = ?) " +
+                "AND video_watched_BV NOT IN (SELECT video_watched_BV FROM watched_relation WHERE user_watched_Mid = ?)) watched_videos ON v.BV = watched_videos.video_watched_BV " +
+                "JOIN Users u ON v.owner_Mid = u.mid;";
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setLong(1, userMid);
+            pstmt.setLong(2, userMid);
+
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                totalVideos = rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return totalVideos;
+    }
+
+
+
 
 
     @Override
     public List<String> recommendVideosForUser(AuthInfo auth, int pageSize, int pageNum) {
 
 //        Future<List<String>> future = executorService.submit(() -> {
-            // 检查认证信息、分页参数的有效性
-            if (auth == null || !isValidAuth(auth) || pageSize <= 0 || pageNum <= 0) {
-                return null;
-            }
+        // 检查认证信息、分页参数的有效性
+        if (auth == null || !isValidAuth(auth) || pageSize <= 0 || pageNum <= 0) {
+            return null;
+        }
 
         Long userMid = auth.getMid();
+
         if (userMid == 0 && (auth.getQq() != null || auth.getWechat() != null)) {
             userMid = getMidFromAuthInfo(auth);
             if (userMid == null) {
@@ -192,46 +223,70 @@ public class RecommenderServiceImpl implements RecommenderService {
             }
         }
 
-            List<String> recommendedVideos = new ArrayList<>();
-            String sql = "SELECT v.BV "
-        +"FROM videos v "
-        +"JOIN (SELECT video_watched_BV FROM watched_relation WHERE user_watched_Mid IN ( "
-                +"SELECT fr2.user_Mid FROM following_relation fr1 "
-                +"JOIN following_relation fr2 ON fr1.user_Mid = fr2.follow_Mid AND fr1.follow_Mid = fr2.user_Mid "
-               +" WHERE fr1.user_Mid = ?) "
-        +"AND video_watched_BV NOT IN (SELECT video_watched_BV FROM watched_relation WHERE user_watched_Mid = ?) "
-        +"GROUP BY video_watched_BV) watched_videos ON v.BV = watched_videos.video_watched_BV "
-        +"JOIN Users u ON v.owner_Mid = u.mid "
-        +"GROUP BY v.BV, u.level, v.public_time "
-        +"ORDER BY COUNT(watched_videos.video_watched_BV) DESC, u.level DESC, v.public_time DESC "
-        +"LIMIT ? OFFSET ? ";
+        int totalVideos = getTotalVideoCount(userMid);
+        int totalPages = (int) Math.ceil((double) totalVideos / pageSize);
 
-            try (Connection conn = dataSource.getConnection();
-                 PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        if (pageNum > totalPages&&totalPages>=1) {
+            return new ArrayList<>();
+        }
 
-                int offset = (pageNum - 1) * pageSize;
-                pstmt.setLong(1, userMid);
-                pstmt.setLong(2, userMid);
-                pstmt.setInt(3, pageSize);
-                pstmt.setInt(4, offset);
+        List<String> recommendedVideos = new ArrayList<>();
+        String sql = "SELECT\n" +
+                "    v.BV,\n" +
+                "    COUNT(watched_videos.video_watched_BV) AS watched_times,\n" +
+                "    u.level,\n" +
+                "    v.public_time\n" +
+                "FROM videos v\n" +
+                "JOIN (\n" +
+                "    SELECT video_watched_BV\n" +
+                "    FROM watched_relation\n" +
+                "    WHERE user_watched_Mid IN (\n" +
+                "        SELECT fr2.user_Mid\n" +
+                "        FROM following_relation fr1\n" +
+                "        JOIN following_relation fr2\n" +
+                "        ON fr1.user_Mid = fr2.follow_Mid AND fr1.follow_Mid = fr2.user_Mid\n" +
+                "        WHERE fr1.user_Mid = ?\n" +
+                "    )\n" +
+                "    AND video_watched_BV NOT IN (\n" +
+                "        SELECT video_watched_BV\n" +
+                "        FROM watched_relation\n" +
+                "        WHERE user_watched_Mid = ?\n" +
+                "    )\n" +
+                ") watched_videos ON v.BV = watched_videos.video_watched_BV\n" +
+                "JOIN Users u ON v.owner_Mid = u.mid\n" +
+                "GROUP BY v.BV, u.level, v.public_time\n" +
+                "ORDER BY watched_times DESC, u.level DESC, v.public_time DESC\n" +
+                "LIMIT ? OFFSET ? ";
 
-                ResultSet rs = pstmt.executeQuery();
-                while (rs.next()) {
-                    String bv = rs.getString("BV");
-                    recommendedVideos.add(bv);
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-                return null;
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql);
+
+            ) {
+
+            int offset = (pageNum - 1) * pageSize;
+            pstmt.setLong(1, userMid);
+            pstmt.setLong(2, userMid);
+            pstmt.setInt(3, pageSize);
+            pstmt.setInt(4, offset);
+
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                String bv = rs.getString("BV");
+                recommendedVideos.add(bv);
             }
 
-            // 如果用户兴趣为空，则返回 generalRecommendations 的结果
-            if (recommendedVideos.isEmpty()) {
-                return generalRecommendations(pageSize, pageNum);
-            }
 
-            return recommendedVideos;
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
 
+        if(recommendedVideos.isEmpty()){
+            return generalRecommendations(pageSize, pageNum);
+        }
+
+
+        return recommendedVideos;
+    }
 
 //        });
 //
@@ -244,8 +299,99 @@ public class RecommenderServiceImpl implements RecommenderService {
 //            Thread.currentThread().interrupt(); // 重置中断状态
 //            return null;
 //        }
+
+
+
+
+
+
+
+
+
+
+
+
+    @Override
+    public List<Long> recommendFriends(AuthInfo auth, int pageSize, int pageNum) {
+        // 检查认证信息和分页参数的有效性
+        if (auth == null || !isValidAuth(auth) || pageSize <= 0 || pageNum <= 0) {
+            return null;
+        }
+
+        Long userMid = auth.getMid();
+        if (userMid == 0 && (auth.getQq() != null || auth.getWechat() != null)) {
+            if (getMidFromAuthInfo(auth) == null) {
+                return new ArrayList<>();
+            }else {
+                userMid = getMidFromAuthInfo(auth);
+            }
+        }
+
+        //过不了oj 可能是at least？？？先标记一下
+//        Future<List<Long>> future = executorService.submit(() -> {
+        List<Long> recommendedUserIds = new ArrayList<>();
+        String sql = "SELECT fr2.user_Mid, COUNT(*) as common_followings, u.level " +
+                "FROM following_relation fr1 " +
+                "JOIN following_relation fr2 ON fr1.follow_Mid = fr2.follow_Mid AND fr1.user_Mid != fr2.user_Mid " +
+                "JOIN Users u ON fr2.user_Mid = u.mid " +
+                "WHERE fr1.user_Mid = ? AND fr2.user_Mid NOT IN (SELECT follow_Mid FROM following_relation WHERE user_Mid = ?) " +
+                "GROUP BY fr2.user_Mid, u.level " +
+                "ORDER BY common_followings DESC, u.level DESC, fr2.user_Mid ASC " +
+                "LIMIT ? OFFSET ?";
+//
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            int offset = (pageNum - 1) * pageSize;
+            pstmt.setLong(1, userMid);
+            pstmt.setLong(2, userMid);
+            pstmt.setInt(3, pageSize);
+            pstmt.setInt(4, offset);
+
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                Long userId = rs.getLong("user_Mid");
+                recommendedUserIds.add(userId);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return null;
+        }
+
+        return recommendedUserIds.isEmpty() ? null : recommendedUserIds;
+
     }
 
+//        });
+
+//        try {
+//            // 等待异步执行完成并获取结果
+//            return future.get();
+//        } catch (InterruptedException | ExecutionException e) {
+//            // 异常处理
+//            log.error("Error occurred when likeDanmu", e);
+//            Thread.currentThread().interrupt(); // 重置中断状态
+//            return null;
+//        }
+
+
+
+    private String hashPasswordWithSHA256(String password) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            md.update(password.getBytes());
+
+            byte[] digest = md.digest();
+            StringBuilder sb = new StringBuilder();
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b));
+            }
+
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("Failed to hash password", e);
+        }
+    }
 
 
 
@@ -273,6 +419,7 @@ public class RecommenderServiceImpl implements RecommenderService {
             if (rs.next()) {
                 return rs.getLong("mid");
             }
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -332,86 +479,5 @@ public class RecommenderServiceImpl implements RecommenderService {
 
 
 
-
-
-
-    @Override
-    public List<Long> recommendFriends(AuthInfo auth, int pageSize, int pageNum) {
-        // 检查认证信息和分页参数的有效性
-        if (auth == null || !isValidAuth(auth) || pageSize <= 0 || pageNum <= 0) {
-            return null;
-        }
-
-        Long userMid = auth.getMid();
-        if (userMid == 0 && (auth.getQq() != null || auth.getWechat() != null)) {
-            userMid = getMidFromAuthInfo(auth);
-            if (userMid == null) {
-                return new ArrayList<>();
-            }
-        }
-
-//        Future<List<Long>> future = executorService.submit(() -> {
-        List<Long> recommendedUserIds = new ArrayList<>();
-        String sql = "SELECT fr2.user_Mid, COUNT(*) as common_followings, u.level " +
-                "FROM following_relation fr1 " +
-                "JOIN following_relation fr2 ON fr1.follow_Mid = fr2.follow_Mid AND fr1.user_Mid != fr2.user_Mid " +
-                "JOIN Users u ON fr2.user_Mid = u.mid " +
-                "WHERE fr1.user_Mid = ? AND fr2.user_Mid NOT IN (SELECT follow_Mid FROM following_relation WHERE user_Mid = ?) " +
-                "GROUP BY fr2.user_Mid, u.level " +
-                "ORDER BY common_followings DESC, u.level DESC, fr2.user_Mid ASC " +
-                "LIMIT ? OFFSET ?";
-//
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
-            int offset = (pageNum - 1) * pageSize;
-            pstmt.setLong(1, userMid);
-            pstmt.setLong(2, userMid);
-            pstmt.setInt(3, pageSize);
-            pstmt.setInt(4, offset);
-
-            ResultSet rs = pstmt.executeQuery();
-            while (rs.next()) {
-                Long userId = rs.getLong("user_Mid");
-                recommendedUserIds.add(userId);
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            return null;
-        }
-
-        return recommendedUserIds.isEmpty() ? new ArrayList<>() : recommendedUserIds;
-
-    }
-//        });
-
-//        try {
-//            // 等待异步执行完成并获取结果
-//            return future.get();
-//        } catch (InterruptedException | ExecutionException e) {
-//            // 异常处理
-//            log.error("Error occurred when likeDanmu", e);
-//            Thread.currentThread().interrupt(); // 重置中断状态
-//            return null;
-//        }
-
-
-
-    private String hashPasswordWithSHA256(String password) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            md.update(password.getBytes());
-
-            byte[] digest = md.digest();
-            StringBuilder sb = new StringBuilder();
-            for (byte b : digest) {
-                sb.append(String.format("%02x", b));
-            }
-
-            return sb.toString();
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("Failed to hash password", e);
-        }
-    }
 
 }
