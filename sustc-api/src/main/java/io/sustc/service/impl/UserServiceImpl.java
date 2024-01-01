@@ -38,6 +38,7 @@ public class UserServiceImpl implements UserService {
     }
 
     public long register(RegisterUserReq req){
+
         if (req.getPassword() == null || req.getPassword().isEmpty() ||
                 req.getName() == null || req.getName().isEmpty() ||
                 req.getSex() == null ||
