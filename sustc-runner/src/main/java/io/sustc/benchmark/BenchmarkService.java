@@ -143,8 +143,8 @@ public class BenchmarkService {
 
         return new BenchmarkResult(pass, endTime - startTime);
     }
-
- //   @BenchmarkStep(order = 5, timeout = 8, description = "Test RecommenderService#recommendNextVideo(String)")
+//done
+ //  @BenchmarkStep(order = 5, timeout = 8, description = "Test RecommenderService#recommendNextVideo(String)")
     public BenchmarkResult recVideo() {
         Map<String, List<String>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.REC_VIDEO);
         val pass = new AtomicLong();
@@ -169,7 +169,7 @@ public class BenchmarkService {
 
 
     //ok
-   // @BenchmarkStep(order = 6, timeout = 8, description = "Test RecommenderService#generalRecommendations(int, int)")
+  //  @BenchmarkStep(order = 6, timeout = 8, description = "Test RecommenderService#generalRecommendations(int, int)")
     public BenchmarkResult recGeneral() {
         List<Map.Entry<int[], List<String>>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.REC_GENERAL);
         val pass = new AtomicLong();
@@ -192,8 +192,8 @@ public class BenchmarkService {
 
         return new BenchmarkResult(pass, endTime - startTime);
     }
-//不知道哪里有问题
-    @BenchmarkStep(order = 7, timeout = 8, description = "Test RecommenderService#recommendVideosForUser(AuthInfo, int, int)")
+    //done
+  //  @BenchmarkStep(order = 7, timeout = 8, description = "Test RecommenderService#recommendVideosForUser(AuthInfo, int, int)")
     public BenchmarkResult recUser() {
         List<Map.Entry<Object[], List<String>>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.REC_USER);
         val pass = new AtomicLong();
@@ -217,7 +217,8 @@ public class BenchmarkService {
         return new BenchmarkResult(pass, endTime - startTime);
     }
 
-  //  @BenchmarkStep(order = 8, timeout = 8, description = "Test RecommenderService#recommendFriends(AuthInfo, int, int)")
+    //done
+ //   @BenchmarkStep(order = 8, timeout = 8, description = "Test RecommenderService#recommendFriends(AuthInfo, int, int)")
     public BenchmarkResult recFriends() {
         List<Map.Entry<Object[], List<Long>>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.REC_FRIENDS);
         val pass = new AtomicLong();
@@ -240,7 +241,7 @@ public class BenchmarkService {
 
         return new BenchmarkResult(pass, endTime - startTime);
     }
-
+//done
 //    @BenchmarkStep(order = 9, description = "Test DanmuService#displayDanmu(String, float, float, boolean)")
     public BenchmarkResult danmuDisplay() {
         List<Map.Entry<Object[], Integer>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.DANMU_DISPLAY);
@@ -265,8 +266,8 @@ public class BenchmarkService {
 
         return new BenchmarkResult(pass, endTime - startTime);
     }
-
- //   @BenchmarkStep(order = 10, description = "Test DanmuService#sendDanmu(AuthInfo, String, String, float)")
+//done
+    @BenchmarkStep(order = 10, description = "Test DanmuService#sendDanmu(AuthInfo, String, String, float)")
     public BenchmarkResult danmuSend() {
         List<Map.Entry<Object[], Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.DANMU_SEND);
         val pass = new AtomicLong();
@@ -299,7 +300,7 @@ public class BenchmarkService {
         return new BenchmarkResult(pass, endTime - startTime);
     }
 
-  //  @BenchmarkStep(order = 11, description = "Test UserService#getUserInfo(long)")
+    @BenchmarkStep(order = 11, description = "Test UserService#getUserInfo(long)")
     public BenchmarkResult getUserInfo() {
         Map<Long, UserInfoResp> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.USER_INFO);
         val pass = new AtomicLong();
@@ -322,7 +323,7 @@ public class BenchmarkService {
         return new BenchmarkResult(pass, endTime - startTime);
     }
 
-   // @BenchmarkStep(order = 12, description = "Test DanmuService#likeDanmu(AuthInfo, long)")
+    @BenchmarkStep(order = 12, description = "Test DanmuService#likeDanmu(AuthInfo, long)")
     public BenchmarkResult danmuLike() {
         Map<Long, AuthInfo> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.DANMU_LIKE);
         val pass = new AtomicLong();
