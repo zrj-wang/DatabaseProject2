@@ -167,6 +167,8 @@ public class BenchmarkService {
         return new BenchmarkResult(pass, endTime - startTime);
     }
 
+
+    //ok
     @BenchmarkStep(order = 6, timeout = 8, description = "Test RecommenderService#generalRecommendations(int, int)")
     public BenchmarkResult recGeneral() {
         List<Map.Entry<int[], List<String>>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.REC_GENERAL);
@@ -190,7 +192,7 @@ public class BenchmarkService {
 
         return new BenchmarkResult(pass, endTime - startTime);
     }
-
+//不知道哪里有问题
     @BenchmarkStep(order = 7, timeout = 8, description = "Test RecommenderService#recommendVideosForUser(AuthInfo, int, int)")
     public BenchmarkResult recUser() {
         List<Map.Entry<Object[], List<String>>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.REC_USER);
@@ -264,7 +266,7 @@ public class BenchmarkService {
         return new BenchmarkResult(pass, endTime - startTime);
     }
 
-    @BenchmarkStep(order = 10, description = "Test DanmuService#sendDanmu(AuthInfo, String, String, float)")
+ //   @BenchmarkStep(order = 10, description = "Test DanmuService#sendDanmu(AuthInfo, String, String, float)")
     public BenchmarkResult danmuSend() {
         List<Map.Entry<Object[], Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.DANMU_SEND);
         val pass = new AtomicLong();

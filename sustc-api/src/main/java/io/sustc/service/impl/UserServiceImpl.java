@@ -32,10 +32,10 @@ public class UserServiceImpl implements UserService {
     @Autowired
     private DataSource dataSource;
     private ExecutorService executorService;
-    @PostConstruct
-    public void init() {
-        executorService = Executors.newFixedThreadPool(10);
-    }
+//    @PostConstruct
+//    public void init() {
+//        executorService = Executors.newFixedThreadPool(10);
+//    }
 
     public long register(RegisterUserReq req){
         if (req.getPassword() == null || req.getPassword().isEmpty() ||
