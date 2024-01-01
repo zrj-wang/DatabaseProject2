@@ -36,7 +36,7 @@ public class DanmuServiceImpl implements DanmuService {
     private DataSource dataSource;
 
 
-    private ExecutorService executorService;
+//    private ExecutorService executorService;
 
 
 //    @PostConstruct
@@ -81,30 +81,49 @@ public class DanmuServiceImpl implements DanmuService {
     @Override
     public long sendDanmu(AuthInfo auth, String bv, String content, float time) {
 
+        Long userMid = auth.getMid();
+
+        if (userMid == 0 && (auth.getQq() != null || auth.getWechat() != null)) {
+            userMid = getMidFromAuthInfo(auth);
+            if (userMid == null) {
+                return -1;
+            }
+        }
+
+
+        if(!validtime(time,bv)){
+            return -1;
+        }
+
 
 //        Future<Long> future = executorService.submit(() -> {
-            if (auth == null || !isValidAuth(auth)) {
+            if ( !isValidAuth(auth)) {
+
                 return -1L;
             }
 
-            if (bv == null || !videoExists(bv)) {
+            if ( !videoExists(bv)) {
+
                 return -1L;
             }
 
             if (content == null || content.trim().isEmpty()) {
+
                 return -1L;
             }
 
             if (!isVideoPublished(bv)) {
+
                 return -1L;
             }
 
-            if (!hasWatchedVideo(auth.getMid(), bv)) {
+            if (!hasWatchedVideo(userMid, bv)) {
+
                 return -1L;
             }
 
-            return insertDanmu(bv, auth.getMid(), content, time);
-
+            return insertDanmu(bv, userMid, content, time);
+    }
 //        });
 //
 //        try {
@@ -116,9 +135,23 @@ public class DanmuServiceImpl implements DanmuService {
 //
 //            return -1;
 //        }
+
+
+    private boolean validtime(float time,String BV) {
+        String sql = "SELECT duration FROM videos WHERE BV = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, BV);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                float duration = rs.getFloat("duration");
+                return time >= 0 && time <= duration;
+            }
+        }catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
     }
-
-
 
 
     private Long getMidFromAuthInfo(AuthInfo auth) {
@@ -224,13 +257,15 @@ public class DanmuServiceImpl implements DanmuService {
         return false;
     }
 
-    private boolean queryHasWatchedVideoFromDB(long mid, String bv) {
+
+
+    public boolean hasWatchedVideo(long mid, String bv) {
 
         // 检查参数是否有效
         if (mid <= 0 || bv == null || bv.trim().isEmpty()) {
             return false;
         }
-        String sql = "SELECT COUNT(*) FROM watched_relation WHERE user_watched_Mid = ? AND video_view_BV = ?";
+        String sql = "SELECT COUNT(*) FROM watched_relation WHERE user_watched_Mid = ? AND video_watched_BV = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
@@ -245,13 +280,6 @@ public class DanmuServiceImpl implements DanmuService {
         }
 
         return false;
-    }
-
-
-    public boolean hasWatchedVideo(long mid, String bv) {
-
-     Boolean   watched = queryHasWatchedVideoFromDB(mid, bv);
-     return watched;
 
     }
 
@@ -274,7 +302,7 @@ public class DanmuServiceImpl implements DanmuService {
                 Timestamp reviewTime = rs.getTimestamp("review_time");
 
                 // 检查public_time是否存在且在review_time之后
-                return publicTime != null && (reviewTime == null || publicTime.after(reviewTime));
+                return publicTime != null && (reviewTime == null || publicTime.after(reviewTime)||publicTime.equals(reviewTime));
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -288,35 +316,28 @@ public class DanmuServiceImpl implements DanmuService {
 
     private long insertDanmu(String bv, long mid, String content, float time) {
 
-        // 参数有效性检查
-        if (bv == null || bv.trim().isEmpty() || mid <= 0 || content == null || content.trim().isEmpty()) {
-            return -1;
-        }
+
         String sql = "INSERT INTO danmu (danmu_BV, danmu_Mid, time, content, postTime) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)";
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+             PreparedStatement pstmt = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
 
             pstmt.setString(1, bv);
             pstmt.setLong(2, mid);
             pstmt.setFloat(3, time);
             pstmt.setString(4, content);
-            int affectedRows = pstmt.executeUpdate();
+            pstmt.executeUpdate();
+            ResultSet generatedKeys = pstmt.getGeneratedKeys();
 
-            if (affectedRows == 0) {
-                throw new SQLException("Creating danmu failed, no rows affected.");
-            }
-
-            try (ResultSet generatedKeys = pstmt.getGeneratedKeys()) {
                 if (generatedKeys.next()) {
                     return generatedKeys.getLong(1);
                 } else {
-                    throw new SQLException("Creating danmu failed, no ID obtained.");
+                    return -1;
                 }
-            }
+
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
-
         return -1;
     }
 
@@ -329,10 +350,11 @@ public class DanmuServiceImpl implements DanmuService {
 
 
 
-        Future<List<Long>> future = executorService.submit(() -> {
+//        Future<List<Long>> future = executorService.submit(() -> {
             if (bv == null || bv.trim().isEmpty() || timeStart < 0 || timeEnd < 0 || timeStart > timeEnd) {
                 return null;
             }
+
             if(!videoExists(bv)){
                 return null;
             }
@@ -361,16 +383,8 @@ public class DanmuServiceImpl implements DanmuService {
 
 
 
-        });
+//        });
 
-        try {
-
-            return future.get();
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("Error occurred when displayDanmu", e);
-            Thread.currentThread().interrupt();
-            return null;
-        }
 
 
     }
@@ -400,7 +414,7 @@ public class DanmuServiceImpl implements DanmuService {
     private String buildDanmuQuerySql(String bv, float timeStart, float timeEnd, boolean filter) {
         String baseSql = "SELECT danmu_id FROM danmu WHERE danmu_BV = ? AND time >= ? AND time <= ?";
         if (filter) {
-            return baseSql + " GROUP BY content ORDER BY MIN(postTime), time";
+            return baseSql + " GROUP BY danmu_id,content ORDER BY MIN(postTime), time";
         } else {
             return baseSql + " ORDER BY time";
         }
@@ -414,13 +428,21 @@ public class DanmuServiceImpl implements DanmuService {
 
 
 
-        Future<Boolean> future = executorService.submit(() -> {
+//        Future<Boolean> future = executorService.submit(() -> {
             if (auth == null || id <= 0) {
                 return false;
             }
             if (!isValidAuth(auth)) {
                 return false;
             }
+        Long userMid = auth.getMid();
+
+        if (userMid == 0 && (auth.getQq() != null || auth.getWechat() != null)) {
+            userMid = getMidFromAuthInfo(auth);
+            if (userMid == null) {
+                return false;
+            }
+        }
 
             // 检查弹幕是否存在
             if (!danmuExists(id)) {
@@ -432,7 +454,7 @@ public class DanmuServiceImpl implements DanmuService {
                  PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
                 pstmt.setLong(1, id);
-                pstmt.setLong(2, auth.getMid());
+                pstmt.setLong(2, userMid);
                 ResultSet rs = pstmt.executeQuery();
                 if (rs.next()) {
                     boolean isLiked = rs.getInt(1) > 0;
@@ -450,15 +472,15 @@ public class DanmuServiceImpl implements DanmuService {
             }
             return false;
 
-        });
+//        });
 
-        try {
-            return future.get();
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("Error occurred when likeDanmu", e);
-            Thread.currentThread().interrupt(); // 重置中断状态
-            return false;
-        }
+//        try {
+//            return future.get();
+//        } catch (InterruptedException | ExecutionException e) {
+//            log.error("Error occurred when likeDanmu", e);
+//            Thread.currentThread().interrupt(); // 重置中断状态
+//            return false;
+//        }
 
 
     }
