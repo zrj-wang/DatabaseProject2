@@ -472,10 +472,19 @@ public class VideoServiceImpl implements VideoService{
 
     public List<String> searchVideo(AuthInfo auth, String keywords, int pageSize, int pageNum) {
         Future<List<String>> future = executorService.submit(() -> {
+            if(!isValidAuth(auth)){
+                return null;
+            }
+            Long userId;
+            if(auth.getMid()!=0){
+                userId=auth.getMid();
+            }else{
             // 验证 auth 是否有效，并从中获取用户的 mid
-            Long userId = getMidFromAuthInfo(auth);
+            userId=getMidFromAuthInfo(auth);
             if (userId == null) {
+
                 return null; // 用户认证无效或无法获取用户 ID
+                }
             }
 
             // 检查 keywords 是否无效
@@ -518,20 +527,22 @@ public class VideoServiceImpl implements VideoService{
                 "keyword_search AS (" +
                 "SELECT v.BV, v.title, v.description, u.name AS owner_name, " +
                 "COALESCE(vws.view_count, 0) AS view_count, " +
-                "SUM(" +
-                "(ARRAY_LENGTH(STRING_TO_ARRAY(LOWER(v.title), LOWER(sk.keyword)), 1) - 1) + " +
-                "(ARRAY_LENGTH(STRING_TO_ARRAY(LOWER(v.description), LOWER(sk.keyword)), 1) - 1) + " +
-                "(ARRAY_LENGTH(STRING_TO_ARRAY(LOWER(u.name), LOWER(sk.keyword)), 1) - 1)" +
-                ") AS relevance " +
+                "SUM(CASE " +
+                "WHEN LENGTH(LOWER(sk.keyword)) > 0 THEN " +
+                "(LENGTH(LOWER(v.title)) - LENGTH(REPLACE(LOWER(v.title), LOWER(sk.keyword), ''))) / NULLIF(LENGTH(LOWER(sk.keyword)), 0) + " +
+                "(LENGTH(LOWER(v.description)) - LENGTH(REPLACE(LOWER(v.description), LOWER(sk.keyword), ''))) / NULLIF(LENGTH(LOWER(sk.keyword)), 0) + " +
+                "(LENGTH(LOWER(u.name)) - LENGTH(REPLACE(LOWER(u.name), LOWER(sk.keyword), ''))) / NULLIF(LENGTH(LOWER(sk.keyword)), 0) " +
+                "ELSE 0 " +
+                "END) AS relevance " +
                 "FROM videos v " +
                 "JOIN users u ON v.owner_Mid = u.mid " +
                 "LEFT JOIN views vws ON v.BV = vws.BV, " +
                 "split_keywords sk " +
                 "WHERE " +
-                "(LOWER(v.title) LIKE '%' || LOWER(sk.keyword) || '%' " +
-                "OR LOWER(v.description) LIKE '%' || LOWER(sk.keyword) || '%' " +
+                "(LOWER(v.title) LIKE '%' || LOWER(sk.keyword) || '%'" +
+                "OR LOWER(v.description) LIKE '%' || LOWER(sk.keyword) || '%' "+
                 "OR LOWER(u.name) LIKE '%' || LOWER(sk.keyword) || '%') " +
-                "AND " +
+                "AND" +
                 "((v.reviewer != 0 AND v.review_time IS NOT NULL AND v.public_time <= CURRENT_TIMESTAMP) " +
                 "OR u.mid = ?) " +
                 "GROUP BY v.BV, u.name, v.title, v.description, vws.view_count) " +
@@ -539,7 +550,8 @@ public class VideoServiceImpl implements VideoService{
                 "FROM keyword_search k " +
                 "WHERE k.relevance IS NOT NULL AND k.relevance > 0 " +
                 "ORDER BY k.relevance DESC, k.view_count DESC " +
-                "LIMIT ? OFFSET ?";
+                "LIMIT ? OFFSET ?;";
+
 
 
         // 执行查询并处理结果
@@ -642,8 +654,18 @@ public class VideoServiceImpl implements VideoService{
     }
 
     private Set<Integer> performGetHotspot(String bv) {
-        // SQL 查询语句
-        String sql = "SELECT CAST(time / 10 AS INTEGER) AS chunk, COUNT(*) AS cnt FROM danmu WHERE danmu_BV = ? GROUP BY chunk ORDER BY cnt DESC";
+        // 修改后的 SQL 查询语句
+        String sql = "SELECT chunk, cnt " +
+                "FROM (SELECT FLOOR(time/10) AS chunk, COUNT(*) AS cnt " +
+                "FROM danmu " +
+                "WHERE danmu_BV = ? " +
+                "GROUP BY chunk) AS subquery " +
+                "WHERE cnt = (SELECT MAX(cnt) " +
+                "FROM (SELECT COUNT(*) AS cnt " +
+                "FROM danmu " +
+                "WHERE danmu_BV = ? " +
+                "GROUP BY FLOOR(time/10)) AS dc)";
+
         Set<Integer> hotspots = new HashSet<>();
 
         try (Connection conn = dataSource.getConnection();
@@ -651,6 +673,7 @@ public class VideoServiceImpl implements VideoService{
 
             // 设置查询参数
             pstmt.setString(1, bv);
+            pstmt.setString(2, bv); // 为内部查询设置相同的参数
 
             // 执行查询
             ResultSet rs = pstmt.executeQuery();
@@ -667,10 +690,13 @@ public class VideoServiceImpl implements VideoService{
             }
             return hotspots;
         } catch (SQLException e) {
+            // 异常处理逻辑
+            e.printStackTrace(); // 记录异常信息，有助于调试
         }
         // 如果发生异常，返回空集合
         return Collections.emptySet();
     }
+
 
     public boolean reviewVideo(AuthInfo auth, String bv) {
         // 验证 auth 是否有效
@@ -755,13 +781,19 @@ public class VideoServiceImpl implements VideoService{
             return false;
         }
 
+        // 获取用户的 mid
+        Long mid = getMidFromAuthInfo(auth);
+        if (mid == null) {
+            return false; // 如果无法获取 mid，则认为是无效的操作
+        }
+
         // 检查 bv 是否无效
         if (bv == null || bv.isEmpty() || !videoExists(bv)) {
             return false;
         }
 
         // 检查用户是否已经给这个视频投过币
-        if (hasUserDonatedCoin(auth.getMid(), bv)) {
+        if (hasUserDonatedCoin(mid, bv)) {
             return false;
         }
 
