@@ -279,7 +279,7 @@ public class BenchmarkService {
     }
 
 //done
-    @BenchmarkStep(order = 10, description = "Test DanmuService#sendDanmu(AuthInfo, String, String, float)")
+//    @BenchmarkStep(order = 10, description = "Test DanmuService#sendDanmu(AuthInfo, String, String, float)")
 
     public BenchmarkResult danmuSend() {
         List<Map.Entry<Object[], Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.DANMU_SEND);
@@ -365,7 +365,7 @@ public class BenchmarkService {
     }
 
 
-  //  @BenchmarkStep(order = 13, description = "Test VideoService#coinVideo(AuthInfo, String)")
+//    @BenchmarkStep(order = 13, description = "Test VideoService#coinVideo(AuthInfo, String)")
 
     public BenchmarkResult videoCoin() {
         List<Map.Entry<Object[], Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.VIDEO_COIN);
