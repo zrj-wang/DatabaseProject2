@@ -83,6 +83,7 @@ public class DatabaseServiceImpl implements DatabaseService {
             String open12="create index index12 on danmuLiked_relation(user_liked_Mid)";
             String open13="create index index13 on danmu(danmu_BV)";
             String open14="create index index14 on danmu(danmu_Mid)";
+
             try (
                  PreparedStatement userPstmt = conn.prepareStatement(userSql);
                  PreparedStatement followingPstmt = conn.prepareStatement(followingSql);

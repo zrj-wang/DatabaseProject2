@@ -946,17 +946,18 @@ public class VideoServiceImpl implements VideoService{
         // SQL 查询2：在 coin_relation 表中插入新记录
         String sqlInsertCoinRelation = "INSERT INTO coin_relation (video_coin_BV, user_coin_Mid) VALUES (?, ?)";
 
-        Connection conn = null;
-        PreparedStatement pstmtDecreaseCoin = null;
-        PreparedStatement pstmtInsertCoinRelation = null;
 
-        try {
+
+        try (Connection conn=dataSource.getConnection();
+             PreparedStatement pstmtDecreaseCoin = conn.prepareStatement(sqlDecreaseCoin);
+             PreparedStatement pstmtInsertCoinRelation = conn.prepareStatement(sqlInsertCoinRelation)){
             // 获取连接并开启事务
-            conn = dataSource.getConnection();
-            conn.setAutoCommit(false); // 关闭自动提交
+
+//            conn.setAutoCommit(false); // 关闭自动提交
+
 
             // 执行第一个操作：减少用户的硬币数量
-            pstmtDecreaseCoin = conn.prepareStatement(sqlDecreaseCoin);
+
             pstmtDecreaseCoin.setLong(1, mid);
             int updatedRows = pstmtDecreaseCoin.executeUpdate();
 
@@ -967,7 +968,6 @@ public class VideoServiceImpl implements VideoService{
             }
 
             // 执行第二个操作：在 coin_relation 表中插入新记录
-            pstmtInsertCoinRelation = conn.prepareStatement(sqlInsertCoinRelation);
             pstmtInsertCoinRelation.setString(1, bv);
             pstmtInsertCoinRelation.setLong(2, mid);
             pstmtInsertCoinRelation.executeUpdate();
@@ -977,24 +977,8 @@ public class VideoServiceImpl implements VideoService{
             return true;
         } catch (SQLException e) {
             e.printStackTrace();
-            if (conn != null) {
-                try {
-                    conn.rollback(); // 发生异常时回滚事务
-                } catch (SQLException ex) {
-                    ex.printStackTrace();
-                }
-            }
-            return false;
-        } finally {
-            // 关闭资源
-            try {
-                if (pstmtDecreaseCoin != null) pstmtDecreaseCoin.close();
-                if (pstmtInsertCoinRelation != null) pstmtInsertCoinRelation.close();
-                if (conn != null) conn.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
         }
+        return false;
     }
 
 
