@@ -845,32 +845,7 @@ public class VideoServiceImpl implements VideoService{
 //        }
     }
 
-    private boolean isVideoReviewed(String bv) {
-        // SQL 查询语句
-        String sql = "SELECT review_time FROM videos WHERE BV = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
-            // 设置查询参数
-            pstmt.setString(1, bv);
-
-            // 执行查询
-            ResultSet rs = pstmt.executeQuery();
-
-            // 检查查询结果
-            if (rs.next()) {
-                // 获取 review_time 字段的值
-                Timestamp reviewTime = rs.getTimestamp("review_time");
-                // 如果 review_time 不为 null，则视频已被审核
-                return reviewTime != null;
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            // 在生产环境中，应该使用日志记录异常信息
-        }
-        // 如果查询不到视频或发生异常，假设视频未被审核
-        return false;
-    }
 
     public boolean coinVideo(AuthInfo auth, String bv) {
         // 验证 auth 是否有效
@@ -978,7 +953,7 @@ public class VideoServiceImpl implements VideoService{
         try {
             // 获取连接并开启事务
             conn = dataSource.getConnection();
-//            conn.setAutoCommit(false); // 关闭自动提交
+            conn.setAutoCommit(false); // 关闭自动提交
 
             // 执行第一个操作：减少用户的硬币数量
             pstmtDecreaseCoin = conn.prepareStatement(sqlDecreaseCoin);
@@ -987,7 +962,7 @@ public class VideoServiceImpl implements VideoService{
 
             // 检查是否有硬币减少，如果没有，则回滚并返回 false
             if (updatedRows == 0) {
-//                conn.rollback();
+                conn.rollback();
                 return false;
             }
 
@@ -998,30 +973,30 @@ public class VideoServiceImpl implements VideoService{
             pstmtInsertCoinRelation.executeUpdate();
 
             // 提交事务
-//            conn.commit();
+            conn.commit();
             return true;
         } catch (SQLException e) {
             e.printStackTrace();
-//            if (conn != null) {
-//                try {
-//                    conn.rollback(); // 发生异常时回滚事务
-//                } catch (SQLException ex) {
-//                    ex.printStackTrace();
-//                }
-//            }
+            if (conn != null) {
+                try {
+                    conn.rollback(); // 发生异常时回滚事务
+                } catch (SQLException ex) {
+                    ex.printStackTrace();
+                }
+            }
             return false;
+        } finally {
+            // 关闭资源
+            try {
+                if (pstmtDecreaseCoin != null) pstmtDecreaseCoin.close();
+                if (pstmtInsertCoinRelation != null) pstmtInsertCoinRelation.close();
+                if (conn != null) conn.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
-//        finally {
-//            // 关闭资源
-//            try {
-//                if (pstmtDecreaseCoin != null) pstmtDecreaseCoin.close();
-//                if (pstmtInsertCoinRelation != null) pstmtInsertCoinRelation.close();
-//                if (conn != null) conn.close();
-//            } catch (SQLException e) {
-//                e.printStackTrace();
-//            }
-//        }
     }
+
 
 
 
