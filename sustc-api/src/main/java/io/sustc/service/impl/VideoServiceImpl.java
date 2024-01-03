@@ -41,11 +41,22 @@ public class VideoServiceImpl implements VideoService{
             return null;
         }
 
+        Long mid;
+        if(auth.getMid() != 0){
+            mid = auth.getMid();
+        } else {
+            // 验证 auth 是否有效，并从中获取用户的 mid
+            mid = getMidFromAuthInfo(auth);
+            if (mid == null) {
+                return null; // 用户认证无效或无法获取用户 ID
+            }
+        }
+
         // 验证 req 是否有效
-        if (req == null || req.getTitle() == null || req.getTitle().isEmpty() ||
+        if (req == null || req.getTitle() == null || req.getTitle().isEmpty() || req.getPublicTime()==null||
                 req.getDuration() < 10 ||
-                (req.getPublicTime() != null && req.getPublicTime().toLocalDateTime().isBefore(LocalDateTime.now())) ||
-                isTitleExist(auth.getMid(), req.getTitle())) {
+                ( req.getPublicTime().toLocalDateTime().isBefore(LocalDateTime.now())) ||
+                isTitleExist(mid, req.getTitle())) {
             return null;
         }
 
@@ -55,7 +66,7 @@ public class VideoServiceImpl implements VideoService{
         } while (isBVExist(bv)); // 重复生成BV直到找到一个独一无二的值
 
         // 实现视频发布的逻辑
-        if (insertVideoInfo(auth.getMid(), bv, req)) {
+        if (insertVideoInfo(mid, bv, req)) {
             return bv;
         } else {
             return null;
@@ -66,28 +77,50 @@ public class VideoServiceImpl implements VideoService{
     // 将视频信息插入数据库
     private boolean insertVideoInfo(long mid, String bv, PostVideoReq req) {
         String sql = "INSERT INTO videos (BV, title, owner_Mid, commit_time, review_time, public_time, duration, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+        try {
+            conn = dataSource.getConnection();
+            conn.setAutoCommit(false); // 禁用自动提交
 
+            pstmt = conn.prepareStatement(sql);
             pstmt.setString(1, bv);
             pstmt.setString(2, req.getTitle());
             pstmt.setLong(3, mid);
             pstmt.setTimestamp(4, Timestamp.valueOf(LocalDateTime.now())); // commit_time
             pstmt.setTimestamp(5, null); // review_time
-
-            // 直接使用 req.getPublicTime()，无需转换
             pstmt.setTimestamp(6, req.getPublicTime()); // public_time
-
             pstmt.setLong(7, (long) req.getDuration());
             pstmt.setString(8, req.getDescription());
 
             int rowsAffected = pstmt.executeUpdate();
-            return rowsAffected > 0;
+            if (rowsAffected > 0) {
+                conn.commit(); // 提交事务
+                return true;
+            } else {
+                conn.rollback(); // 回滚事务
+                return false;
+            }
         } catch (SQLException e) {
             e.printStackTrace();
+            if (conn != null) {
+                try {
+                    conn.rollback(); // 发生异常时回滚事务
+                } catch (SQLException ex) {
+                    ex.printStackTrace();
+                }
+            }
+            return false;
+        } finally {
+            try {
+                if (pstmt != null) pstmt.close();
+                if (conn != null) conn.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
-        return false;
     }
+
 
 
     private Long getMidFromAuthInfo(AuthInfo auth) {
@@ -209,35 +242,35 @@ public class VideoServiceImpl implements VideoService{
 
 
     public boolean deleteVideo(AuthInfo auth, String bv) {
-        Future<Boolean> future = executorService.submit(() -> {
+
             // 验证 auth 是否有效
             if (!isValidAuth(auth)) {
                 return false;
             }
 
+            Long mid;
+            if(auth.getMid() != 0){
+                mid = auth.getMid();
+            } else {
+                // 验证 auth 是否有效，并从中获取用户的 mid
+                mid = getMidFromAuthInfo(auth);
+                if (mid == null) {
+                    return false; // 用户认证无效或无法获取用户 ID
+                }
+            }
+
             // 检查 bv 是否无效
-            if (bv == null || bv.isEmpty() || !videoExists(bv)) {
+            if (bv == null || bv.isEmpty() ) {
                 return false;
             }
 
-            // 检查当前用户是否为视频的所有者或超级用户
-            if (!isOwner(auth, bv) && !isSuperuser(auth)) {
-                return false;
-            }
+
 
             // 执行删除视频的操作
-            return performDeleteVideo(bv);
-        });
+            return performDeleteVideo(mid,bv);
 
-        try {
-            // 等待异步执行完成并获取结果
-            return future.get();
-        } catch (InterruptedException | ExecutionException e) {
-            // 异常处理
-            log.error("Error occurred when deleting video", e);
-            Thread.currentThread().interrupt(); // 重置中断状态
-            return false;
-        }
+
+
     }
 
     private boolean videoExists(String bv) {
@@ -264,106 +297,125 @@ public class VideoServiceImpl implements VideoService{
         return false;
     }
 
-    private boolean isOwner(AuthInfo auth, String bv) {
-        // SQL 查询语句
-        String sql = "SELECT COUNT(*) FROM videos WHERE BV = ? AND owner_Mid = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
-            // 设置查询参数
-            pstmt.setString(1, bv);
-            pstmt.setLong(2, auth.getMid());
-
-            // 执行查询
-            ResultSet rs = pstmt.executeQuery();
-
-            // 检查查询结果
-            if (rs.next() && rs.getInt(1) > 0) {
-                // 如果计数大于0，当前用户是视频的所有者
-                return true;
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        // 如果没有找到视频或发生异常，返回 false
-        return false;
-    }
-
-    private boolean isSuperuser(AuthInfo auth) {
-        // SQL 查询语句
-        String sql = "SELECT identity FROM users WHERE mid = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
-            // 设置查询参数
-            pstmt.setLong(1, auth.getMid());
-
-            // 执行查询
-            ResultSet rs = pstmt.executeQuery();
-
-            // 检查查询结果
-            if (rs.next() && "SUPERUSER".equals(rs.getString("identity"))) {
-                // 如果identity为SUPERUSER，当前用户是超级用户
-                return true;
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            // 在生产环境中，应该使用日志记录异常信息，而不是打印堆栈跟踪
-        }
-        // 如果没有找到用户或发生异常，返回 false
-        return false;
-    }
 
 
-    private boolean performDeleteVideo(String bv) {
+
+
+
+    public boolean performDeleteVideo(Long mid, String bv) {
         Connection conn = null;
+        PreparedStatement pstmt = null;
+        ResultSet rs = null;
+
         try {
+            // 建立数据库连接
             conn = dataSource.getConnection();
-            // 开启事务
+
+            // 检查视频是否存在
+            String sql = "SELECT owner_Mid FROM videos WHERE BV = ?";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setString(1, bv);
+            rs = pstmt.executeQuery();
+            if (!rs.next()) {
+                return false; // 视频不存在
+            }
+
+            Long ownerMid = rs.getLong("owner_Mid");
+
+            // 释放资源，准备下一个查询
+            rs.close();
+            pstmt.close();
+
+            // 检查用户是否是超级用户或视频的所有者
+            sql = "SELECT identity FROM users WHERE mid = ?";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setLong(1, mid);
+            rs = pstmt.executeQuery();
+            String identity = "";
+            if (rs.next()) {
+                identity = rs.getString("identity");
+            } else {
+                return false; // 用户不存在
+            }
+
+            if (!identity.equals("SUPERUSER") && !mid.equals(ownerMid)) {
+                return false; // 用户不是超级用户也不是视频的所有者
+            }
+
+            // 开始事务
             conn.setAutoCommit(false);
 
-            // 删除与视频相关的数据
-            deleteRelatedData(conn, bv, "danmu", "danmu_BV");
-            deleteRelatedData(conn, bv, "liked_relation", "video_like_BV");
-            deleteRelatedData(conn, bv, "favorite_relation", "video_favorite_BV");
-            deleteRelatedData(conn, bv, "coin_relation", "video_coin_BV");
+            // 删除videos表中的数据
+            sql = "DELETE FROM videos WHERE BV = ?";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setString(1, bv);
+            pstmt.executeUpdate();
 
-            // 删除视频本身
-            String sqlDeleteVideo = "DELETE FROM videos WHERE BV = ?";
-            try (PreparedStatement pstmtDeleteVideo = conn.prepareStatement(sqlDeleteVideo)) {
-                pstmtDeleteVideo.setString(1, bv);
-                int rowsAffected = pstmtDeleteVideo.executeUpdate();
-                if (rowsAffected <= 0) {
-                    conn.rollback();
-                    return false;
-                }
-            }
+            // 删除相关联的数据
+            // 删除 danmu 表中与视频相关的弹幕
+            sql = "DELETE FROM danmu WHERE danmu_BV = ?";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setString(1, bv);
+            pstmt.executeUpdate();
+
+// 删除 danmuliked_relation 表中与视频相关的弹幕喜欢关系
+            sql = "DELETE FROM danmuliked_relation WHERE danmu_liked_id IN (SELECT danmu_id FROM danmu WHERE danmu_BV = ?)";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setString(1, bv);
+            pstmt.executeUpdate();
+
+// 删除 liked_relation 表中与视频相关的点赞关系
+            sql = "DELETE FROM liked_relation WHERE video_like_BV = ?";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setString(1, bv);
+            pstmt.executeUpdate();
+
+// 删除 coin_relation 表中与视频相关的投币关系
+            sql = "DELETE FROM coin_relation WHERE video_coin_BV = ?";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setString(1, bv);
+            pstmt.executeUpdate();
+
+// 删除 watched_relation 表中与视频相关的观看记录
+            sql = "DELETE FROM watched_relation WHERE video_watched_BV = ?";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setString(1, bv);
+            pstmt.executeUpdate();
+
+// 删除 favorite_relation 表中与视频相关的收藏关系
+            sql = "DELETE FROM favorite_relation WHERE video_favorite_BV = ?";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setString(1, bv);
+            pstmt.executeUpdate();
+
 
             // 提交事务
             conn.commit();
+
             return true;
         } catch (SQLException e) {
-            e.printStackTrace();
-            try {
-                if (conn != null) {
-                    conn.rollback();
-                }
-            } catch (SQLException ex) {
-                ex.printStackTrace();
-            }
-        } finally {
-            // 关闭连接
+            // 处理异常情况
             if (conn != null) {
                 try {
-                    conn.setAutoCommit(true);
-                    conn.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
+                    conn.rollback(); // 事务回滚
+                } catch (SQLException ex) {
+                    ex.printStackTrace();
                 }
             }
+            e.printStackTrace();
+            return false;
+        } finally {
+            // 释放资源
+            try {
+                if (rs != null) rs.close();
+                if (pstmt != null) pstmt.close();
+                if (conn != null) conn.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
-        return false;
     }
+
 
     private void deleteRelatedData(Connection conn, String bv, String tableName, String column) throws SQLException {
         String sqlDeleteRelated = "DELETE FROM " + tableName + " WHERE " + column + " = ?";
@@ -375,67 +427,136 @@ public class VideoServiceImpl implements VideoService{
 
     public boolean updateVideoInfo(AuthInfo auth, String bv, PostVideoReq req) {
         // 验证 auth 是否有效
-        if (!isValidAuth(auth)) {
+        if(!isValidAuth(auth)){
             return false;
+        }
+        Long userId;
+        if(auth.getMid()!=0){
+            userId=auth.getMid();
+        }else{
+            // 验证 auth 是否有效，并从中获取用户的 mid
+            userId=getMidFromAuthInfo(auth);
+            if (userId == null) {
+
+                return false; // 用户认证无效或无法获取用户 ID
+            }
         }
 
         // 检查 bv 是否无效
-        if (bv == null || bv.isEmpty() || !videoExists(bv)) {
+        if (bv == null || bv.isEmpty()  ) {
             return false;
         }
 
-        // 检查 req 是否无效
-        if (req == null || req.getTitle() == null || req.getTitle().isEmpty() ||
-                (req.getPublicTime() != null && req.getPublicTime().toLocalDateTime().isBefore(LocalDateTime.now()))) {
+        // 验证 req 是否有效
+        if (req == null || req.getTitle() == null || req.getTitle().isEmpty() || req.getPublicTime()==null||
+                req.getDuration() < 10 ||
+                ( req.getPublicTime().toLocalDateTime().isBefore(LocalDateTime.now())) ||
+                isTitleExist(userId, req.getTitle())) {
             return false;
         }
 
-        // 检查当前用户是否为视频的所有者
-        if (!isOwner(auth, bv)) {
-            return false;
-        }
+
 
         // 执行更新视频信息的操作
-        return performUpdateVideoInfo(bv, req);
+        return performUpdateVideoInfo(userId,bv, req);
     }
 
-    private boolean performUpdateVideoInfo(String bv, PostVideoReq req) {
-        // 获取当前视频的信息
-        VideoRecord currentInfo = getCurrentVideoInfo(bv);
-        if (currentInfo == null) {
-            return false; // 视频不存在或无法获取其信息
-        }
+    private boolean performUpdateVideoInfo(long mid, String bv, PostVideoReq req) {
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+        PreparedStatement pstmtCheckOwnerAndReview = null;
+        PreparedStatement pstmtCheckCurrentInfo = null;
+        ResultSet rs = null;
+        ResultSet rsCurrentInfo = null;
+        boolean wasReviewedBefore = false;
 
-        // 检查视频时长是否被更改
-        if (req.getDuration() != currentInfo.getDuration()) {
-            return false; // 不能更改视频时长
-        }
 
-        // SQL 更新语句
-        String sql = "UPDATE videos SET title = ?, public_time = ?, description = ? WHERE BV = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try {
+            conn = dataSource.getConnection();
+            conn.setAutoCommit(false); // 开始事务，禁用自动提交
 
-            // 设置查询参数
+            // 检查视频是否存在，验证视频拥有者，以及视频是否已被审查过
+            String sqlCheckOwnerAndReview = "SELECT owner_mid, duration, review_time FROM videos WHERE BV = ?";
+            pstmtCheckOwnerAndReview = conn.prepareStatement(sqlCheckOwnerAndReview);
+            pstmtCheckOwnerAndReview.setString(1, bv);
+            rs = pstmtCheckOwnerAndReview.executeQuery();
+
+            if (!rs.next() || rs.getLong("owner_mid") != mid) {
+                conn.rollback(); // 视频不存在或用户不是视频拥有者
+                return false;
+            }
+
+            // 检查视频时长是否与传入的时长匹配
+            if (req.getDuration() != rs.getFloat("duration")) {
+                conn.rollback(); // 时长不匹配
+                return false;
+            }
+
+            // 检查视频是否已经被审查过
+            wasReviewedBefore = rs.getTimestamp("review_time") != null;
+
+            // 检查视频当前信息是否与传入的信息相同
+            String sqlCheckCurrentInfo = "SELECT title, public_time, description FROM videos WHERE BV = ?";
+            pstmtCheckCurrentInfo = conn.prepareStatement(sqlCheckCurrentInfo);
+            pstmtCheckCurrentInfo.setString(1, bv);
+            rsCurrentInfo = pstmtCheckCurrentInfo.executeQuery();
+
+            if (rsCurrentInfo.next()) {
+                String currentTitle = rsCurrentInfo.getString("title");
+                Timestamp currentPublicTime = rsCurrentInfo.getTimestamp("public_time");
+                String currentDescription = rsCurrentInfo.getString("description");
+
+                if (currentTitle.equals(req.getTitle()) &&
+                        currentPublicTime.equals(req.getPublicTime()) &&
+                        currentDescription.equals(req.getDescription())) {
+                    conn.rollback(); // 信息没有变化
+                    return false;
+                }
+            }
+
+            // 更新视频信息
+            String sqlUpdate = "UPDATE videos SET title = ?, public_time = ?, description = ?, review_time = NULL, reviewer = NULL WHERE BV = ?";
+            pstmt = conn.prepareStatement(sqlUpdate);
             pstmt.setString(1, req.getTitle());
             pstmt.setTimestamp(2, req.getPublicTime());
             pstmt.setString(3, req.getDescription());
             pstmt.setString(4, bv);
 
-            // 执行更新
             int rowsAffected = pstmt.executeUpdate();
-
-            // 检查更新结果
             if (rowsAffected > 0) {
-                // 如果受影响的行数大于0，更新成功
-                return currentInfo.getReviewTime() != null; // 如果之前已审核，需要重新审核
+                conn.commit(); // 成功执行更新，提交事务
+                return wasReviewedBefore;
+            } else {
+                conn.rollback(); // 更新未执行，回滚事务
+                return false;
             }
         } catch (SQLException e) {
             e.printStackTrace();
+            if (conn != null) {
+                try {
+                    conn.rollback(); // 发生异常时回滚事务
+                } catch (SQLException ex) {
+                    ex.printStackTrace();
+                }
+            }
+            return false;
+        } finally {
+            // 关闭资源
+            try {
+                if (rsCurrentInfo != null) rsCurrentInfo.close();
+                if (rs != null) rs.close();
+                if (pstmtCheckCurrentInfo != null) pstmtCheckCurrentInfo.close();
+                if (pstmtCheckOwnerAndReview != null) pstmtCheckOwnerAndReview.close();
+                if (pstmt != null) pstmt.close();
+                if (conn != null) conn.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
-        // 如果没有找到视频或发生异常，返回 false
-        return false;
     }
+
+
+
 
     private VideoRecord getCurrentVideoInfo(String bv) {
         String sql = "SELECT bv, title, owner_Mid, commit_time, review_time, public_time, duration, description FROM videos WHERE BV = ?";
@@ -544,7 +665,7 @@ public class VideoServiceImpl implements VideoService{
                 "OR LOWER(u.name) LIKE '%' || LOWER(sk.keyword) || '%') " +
                 "AND" +
                 "((v.reviewer != 0 AND v.review_time IS NOT NULL AND v.public_time <= CURRENT_TIMESTAMP) " +
-                "OR u.mid = ?) " +
+                "OR u.mid = ? OR u.identity ='SUPERUSER') " +
                 "GROUP BY v.BV, u.name, v.title, v.description, vws.view_count) " +
                 "SELECT k.BV, k.title, k.owner_name, k.description, k.relevance, k.view_count " +
                 "FROM keyword_search k " +
@@ -704,50 +825,99 @@ public class VideoServiceImpl implements VideoService{
             return false;
         }
 
+        Long mid;
+        if(auth.getMid() != 0){
+            mid = auth.getMid();
+        } else {
+            // 验证 auth 是否有效，并从中获取用户的 mid
+            mid = getMidFromAuthInfo(auth);
+            if (mid == null) {
+                return false; // 用户认证无效或无法获取用户 ID
+            }
+        }
+
         // 检查 bv 是否无效
-        if (bv == null || bv.isEmpty() || !videoExists(bv)) {
+        if (bv == null || bv.isEmpty() ) {
             return false;
         }
 
-        // 检查当前用户是否为超级用户
-        if (!isSuperuser(auth)) {
-            return false;
-        }
 
-        // 检查当前用户是否为视频的所有者
-        if (isOwner(auth, bv)) {
-            return false;
-        }
 
-        // 检查视频是否已经被审核
-        if (isVideoReviewed(bv)) {
-            return false;
-        }
+
+
+
 
         // 执行审核视频的操作
-        return performReviewVideo(bv);
+        return performReviewVideo(mid,bv);
     }
 
-    private boolean performReviewVideo(String bv) {
-        // SQL 更新语句
-        String sql = "UPDATE videos SET review_time = ? WHERE BV = ? AND review_time IS NULL";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+    private boolean performReviewVideo(long mid, String bv) {
+        Connection conn = null;
+        PreparedStatement pstmtCheckUser = null;
+        PreparedStatement pstmtCheckVideo = null;
+        PreparedStatement pstmtUpdateReview = null;
+        ResultSet rsUser = null;
+        ResultSet rsVideo = null;
 
-            // 设置查询参数
-            pstmt.setTimestamp(1, Timestamp.valueOf(LocalDateTime.now()));
-            pstmt.setString(2, bv);
+        try {
+            conn = dataSource.getConnection();
+            conn.setAutoCommit(false); // 开始事务
 
-            // 执行更新
-            int rowsAffected = pstmt.executeUpdate();
+            // 检查用户是否为 SUPERUSER
+            String sqlCheckUser = "SELECT identity FROM users WHERE mid = ?";
+            pstmtCheckUser = conn.prepareStatement(sqlCheckUser);
+            pstmtCheckUser.setLong(1, mid);
+            rsUser = pstmtCheckUser.executeQuery();
+            if (!rsUser.next() || !"SUPERUSER".equals(rsUser.getString("identity"))) {
+                conn.rollback();
+                return false;
+            }
 
-            // 检查更新结果
-            return rowsAffected > 0;
+            // 检查视频是否存在且未被审查
+            String sqlCheckVideo = "SELECT review_time, reviewer FROM videos WHERE BV = ?";
+            pstmtCheckVideo = conn.prepareStatement(sqlCheckVideo);
+            pstmtCheckVideo.setString(1, bv);
+            rsVideo = pstmtCheckVideo.executeQuery();
+            if (!rsVideo.next() || rsVideo.getTimestamp("review_time") != null || rsVideo.getLong("reviewer") != 0) {
+                conn.rollback();
+                return false;
+            }
+
+            // 更新视频审查信息
+            String sqlUpdateReview = "UPDATE videos SET review_time = ?, reviewer = ? WHERE BV = ?";
+            pstmtUpdateReview = conn.prepareStatement(sqlUpdateReview);
+            pstmtUpdateReview.setTimestamp(1, Timestamp.valueOf(LocalDateTime.now()));
+            pstmtUpdateReview.setLong(2, mid);
+            pstmtUpdateReview.setString(3, bv);
+            pstmtUpdateReview.executeUpdate();
+
+            conn.commit(); // 提交事务
+            return true;
         } catch (SQLException e) {
             e.printStackTrace();
+            if (conn != null) {
+                try {
+                    conn.rollback(); // 发生异常时回滚事务
+                } catch (SQLException ex) {
+                    ex.printStackTrace();
+                }
+            }
+            return false;
+        } finally {
+            // 关闭资源
+            try {
+                if (rsUser != null) rsUser.close();
+                if (rsVideo != null) rsVideo.close();
+                if (pstmtCheckUser != null) pstmtCheckUser.close();
+                if (pstmtCheckVideo != null) pstmtCheckVideo.close();
+                if (pstmtUpdateReview != null) pstmtUpdateReview.close();
+                if (conn != null) conn.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
-        return false;
     }
+
     private boolean isVideoReviewed(String bv) {
         // SQL 查询语句
         String sql = "SELECT review_time FROM videos WHERE BV = ?";
@@ -781,107 +951,151 @@ public class VideoServiceImpl implements VideoService{
             return false;
         }
 
-        // 获取用户的 mid
-        Long mid = getMidFromAuthInfo(auth);
-        if (mid == null) {
-            return false; // 如果无法获取 mid，则认为是无效的操作
+        Long mid;
+        if(auth.getMid() != 0){
+            mid = auth.getMid();
+        } else {
+            // 验证 auth 是否有效，并从中获取用户的 mid
+            mid = getMidFromAuthInfo(auth);
+            if (mid == null) {
+                return false; // 用户认证无效或无法获取用户 ID
+            }
         }
 
         // 检查 bv 是否无效
-        if (bv == null || bv.isEmpty() || !videoExists(bv)) {
+        if (bv == null || bv.isEmpty()) {
             return false;
         }
 
-        // 检查用户是否已经给这个视频投过币
-        if (hasUserDonatedCoin(mid, bv)) {
+        // 检查用户是否能搜索到这个视频
+        if (!canUserSearchAndCoinVideo(mid, bv)) {
             return false;
         }
+
 
         // 执行投币操作
-        return performCoinVideo(auth, bv);
+        return performCoinVideo(mid, bv);
     }
 
-    private boolean performCoinVideo(AuthInfo auth, String bv) {
+
+    // 检查用户是否能够搜索到视频
+    // 检查用户是否能够搜索到视频、是否已经给这个视频投过币，以及是否还有剩余的硬币
+    private boolean canUserSearchAndCoinVideo(Long mid, String bv) {
+        // SQL 查询1：检查用户是否能搜索到视频
+        String sqlSearch = "SELECT COUNT(*) FROM videos v JOIN users u ON v.owner_Mid = u.mid " +
+                "WHERE v.BV = ? AND " +
+                "((v.reviewer != 0 AND v.review_time IS NOT NULL AND v.public_time <= CURRENT_TIMESTAMP) OR u.identity = 'SUPERUSER') " +
+                "AND v.owner_Mid != ?";
+        // SQL 查询2：检查用户是否已经给这个视频投过币
+        String sqlCoin = "SELECT COUNT(*) FROM coin_relation WHERE video_coin_BV = ? AND user_coin_Mid = ?";
+        // SQL 查询3：检查用户是否还有剩余的硬币
+        String sqlCoinsLeft = "SELECT coin FROM users WHERE mid = ?";
+
+        try (Connection conn = dataSource.getConnection();  // 建立数据库连接
+             PreparedStatement pstmtSearch = conn.prepareStatement(sqlSearch);  // 创建 PreparedStatement 用于第一个查询
+             PreparedStatement pstmtCoin = conn.prepareStatement(sqlCoin);  // 创建 PreparedStatement 用于第二个查询
+             PreparedStatement pstmtCoinsLeft = conn.prepareStatement(sqlCoinsLeft)) {  // 创建 PreparedStatement 用于第三个查询
+
+            // 执行第一个查询：检查用户是否能搜索到视频
+            pstmtSearch.setString(1, bv); // 设置第一个参数，视频的 BV
+            pstmtSearch.setLong(2, mid);  // 设置第二个参数，用户的 mid
+            ResultSet rsSearch = pstmtSearch.executeQuery();
+
+            boolean canSearch = false;
+            if (rsSearch.next()) {
+                canSearch = rsSearch.getInt(1) > 0;
+            }
+
+            // 如果用户可以搜索到视频，继续执行后续查询
+            if (canSearch) {
+                // 执行第二个查询：检查用户是否已经给这个视频投过币
+                pstmtCoin.setString(1, bv); // 设置第一个参数，视频的 BV
+                pstmtCoin.setLong(2, mid);  // 设置第二个参数，用户的 mid
+                ResultSet rsCoin = pstmtCoin.executeQuery();
+
+                boolean notDonatedCoin = false;
+                if (rsCoin.next()) {
+                    notDonatedCoin = rsCoin.getInt(1) == 0;
+                }
+
+                // 如果用户还没有给这个视频投过币，检查用户是否还有剩余的硬币
+                if (notDonatedCoin) {
+                    pstmtCoinsLeft.setLong(1, mid);  // 设置参数，用户的 mid
+                    ResultSet rsCoinsLeft = pstmtCoinsLeft.executeQuery();
+
+                    if (rsCoinsLeft.next()) {
+                        return rsCoinsLeft.getInt(1) > 0; // 如果用户的硬币数大于0，返回 true
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false; // 发生 SQL 异常时返回 false
+        }
+
+        return false; // 默认返回 false
+    }
+
+
+
+    public boolean performCoinVideo(Long mid, String bv) {
+        // SQL 查询1：减少用户的硬币数量
+        String sqlDecreaseCoin = "UPDATE users SET coin = coin - 1 WHERE mid = ? AND coin > 0";
+        // SQL 查询2：在 coin_relation 表中插入新记录
+        String sqlInsertCoinRelation = "INSERT INTO coin_relation (video_coin_BV, user_coin_Mid) VALUES (?, ?)";
+
         Connection conn = null;
-        PreparedStatement pstmtCheckCoin = null;
-        PreparedStatement pstmtInsertCoin = null;
-        PreparedStatement pstmtUpdateUserCoin = null;
-        ResultSet rs = null;
+        PreparedStatement pstmtDecreaseCoin = null;
+        PreparedStatement pstmtInsertCoinRelation = null;
 
         try {
+            // 获取连接并开启事务
             conn = dataSource.getConnection();
-            // 开启事务
-            conn.setAutoCommit(false);
+            conn.setAutoCommit(false); // 关闭自动提交
 
-            // 检查用户是否有足够的币
-            String sqlCheckUserCoin = "SELECT coin FROM users WHERE mid = ?";
-            pstmtCheckCoin = conn.prepareStatement(sqlCheckUserCoin);
-            pstmtCheckCoin.setLong(1, auth.getMid());
-            rs = pstmtCheckCoin.executeQuery();
+            // 执行第一个操作：减少用户的硬币数量
+            pstmtDecreaseCoin = conn.prepareStatement(sqlDecreaseCoin);
+            pstmtDecreaseCoin.setLong(1, mid);
+            int updatedRows = pstmtDecreaseCoin.executeUpdate();
 
-            if (!rs.next() || rs.getInt("coin") <= 0) {
-                // 如果用户币不足，返回 false
+            // 检查是否有硬币减少，如果没有，则回滚并返回 false
+            if (updatedRows == 0) {
                 conn.rollback();
                 return false;
             }
 
-            // 给视频投币
-            String sqlInsertCoin = "INSERT INTO coin_relation (video_coin_BV, user_coin_Mid) VALUES (?, ?)";
-            pstmtInsertCoin = conn.prepareStatement(sqlInsertCoin);
-            pstmtInsertCoin.setString(1, bv);
-            pstmtInsertCoin.setLong(2, auth.getMid());
-            pstmtInsertCoin.executeUpdate();
-
-            // 更新用户的币数量
-            String sqlUpdateUserCoin = "UPDATE users SET coin = coin - 1 WHERE mid = ?";
-            pstmtUpdateUserCoin = conn.prepareStatement(sqlUpdateUserCoin);
-            pstmtUpdateUserCoin.setLong(1, auth.getMid());
-            pstmtUpdateUserCoin.executeUpdate();
+            // 执行第二个操作：在 coin_relation 表中插入新记录
+            pstmtInsertCoinRelation = conn.prepareStatement(sqlInsertCoinRelation);
+            pstmtInsertCoinRelation.setString(1, bv);
+            pstmtInsertCoinRelation.setLong(2, mid);
+            pstmtInsertCoinRelation.executeUpdate();
 
             // 提交事务
             conn.commit();
             return true;
         } catch (SQLException e) {
             e.printStackTrace();
-            try {
-                if (conn != null) {
-                    conn.rollback();
+            if (conn != null) {
+                try {
+                    conn.rollback(); // 发生异常时回滚事务
+                } catch (SQLException ex) {
+                    ex.printStackTrace();
                 }
-            } catch (SQLException ex) {
-                ex.printStackTrace();
             }
+            return false;
         } finally {
             // 关闭资源
             try {
-                if (rs != null) rs.close();
-                if (pstmtCheckCoin != null) pstmtCheckCoin.close();
-                if (pstmtInsertCoin != null) pstmtInsertCoin.close();
-                if (pstmtUpdateUserCoin != null) pstmtUpdateUserCoin.close();
-                if (conn != null) {
-                    conn.setAutoCommit(true);
-                    conn.close();
-                }
+                if (pstmtDecreaseCoin != null) pstmtDecreaseCoin.close();
+                if (pstmtInsertCoinRelation != null) pstmtInsertCoinRelation.close();
+                if (conn != null) conn.close();
             } catch (SQLException e) {
                 e.printStackTrace();
             }
         }
-        return false;
     }
 
-    private boolean hasUserDonatedCoin(long mid, String bv) {
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement("SELECT COUNT(*) FROM coin_relation WHERE video_coin_BV = ? AND user_coin_Mid = ?")) {
-            pstmt.setString(1, bv);
-            pstmt.setLong(2, mid);
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                return rs.getInt(1) > 0;
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return false;
-    }
+
 
 
     public boolean likeVideo(AuthInfo auth, String bv) {
@@ -890,81 +1104,125 @@ public class VideoServiceImpl implements VideoService{
             return false;
         }
 
+        Long mid;
+        if(auth.getMid() != 0){
+            mid = auth.getMid();
+        } else {
+            // 验证 auth 是否有效，并从中获取用户的 mid
+            mid = getMidFromAuthInfo(auth);
+            if (mid == null) {
+                return false; // 用户认证无效或无法获取用户 ID
+            }
+        }
+
         // 检查 bv 是否无效
-        if (bv == null || bv.isEmpty() || !videoExists(bv)) {
+        if (bv == null || bv.isEmpty() ) {
+            return false;
+        }
+
+        // 检查用户是否能搜索到这个视频
+        if (!canUserSearchAndLikeVideo(mid, bv)) {
             return false;
         }
 
         // 执行点赞视频的操作
-        return performLikeVideo(auth, bv);
+        return performLikeVideo(mid, bv);
     }
 
-    private boolean performLikeVideo(AuthInfo auth, String bv) {
-        Connection conn = null;
-        PreparedStatement pstmt = null;
-        PreparedStatement pstmtCheckLike = null;
-        PreparedStatement pstmtDeleteLike = null;
-        ResultSet rs = null;
 
-        try {
-            conn = dataSource.getConnection();
-            // 开启事务
-            conn.setAutoCommit(false);
+    private boolean canUserSearchAndLikeVideo(Long mid, String bv) {
+        // SQL 查询：检查用户是否能搜索到视频
+        String sqlSearch = "SELECT COUNT(*) FROM videos v JOIN users u ON v.owner_Mid = u.mid " +
+                "WHERE v.BV = ? AND " +
+                "((v.reviewer != 0 AND v.review_time IS NOT NULL AND v.public_time <= CURRENT_TIMESTAMP) OR u.identity = 'SUPERUSER') " +
+                "AND v.owner_Mid != ?";
 
-            // 检查用户是否已经喜欢这个视频
-            String sqlCheckLike = "SELECT COUNT(*) FROM liked_relation WHERE video_like_BV = ? AND user_like_Mid = ?";
-            pstmtCheckLike = conn.prepareStatement(sqlCheckLike);
-            pstmtCheckLike.setString(1, bv);
-            pstmtCheckLike.setLong(2, auth.getMid());
-            rs = pstmtCheckLike.executeQuery();
+        try (Connection conn = dataSource.getConnection();  // 建立数据库连接
+             PreparedStatement pstmtSearch = conn.prepareStatement(sqlSearch)) {  // 创建 PreparedStatement
 
-            if (rs.next() && rs.getInt(1) > 0) {
-                // 如果用户已经喜欢这个视频，取消点赞
-                String sqlDeleteLike = "DELETE FROM liked_relation WHERE video_like_BV = ? AND user_like_Mid = ?";
-                pstmtDeleteLike = conn.prepareStatement(sqlDeleteLike);
-                pstmtDeleteLike.setString(1, bv);
-                pstmtDeleteLike.setLong(2, auth.getMid());
-                pstmtDeleteLike.executeUpdate();
+            pstmtSearch.setString(1, bv); // 设置第一个参数，视频的 BV
+            pstmtSearch.setLong(2, mid);  // 设置第二个参数，用户的 mid
+            ResultSet rsSearch = pstmtSearch.executeQuery();
 
-                conn.commit();
-                return false; // 返回取消点赞状态
-            } else {
-                // 如果用户尚未喜欢这个视频，添加点赞
-                String sqlInsertLike = "INSERT INTO liked_relation (video_like_BV, user_like_Mid) VALUES (?, ?)";
-                pstmt = conn.prepareStatement(sqlInsertLike);
-                pstmt.setString(1, bv);
-                pstmt.setLong(2, auth.getMid());
-                pstmt.executeUpdate();
-
-                conn.commit();
-                return true; // 返回点赞状态
+            if (rsSearch.next()) {
+                return rsSearch.getInt(1) > 0; // 如果结果大于0，则用户可以搜索到视频
             }
         } catch (SQLException e) {
             e.printStackTrace();
-            try {
-                if (conn != null) {
-                    conn.rollback();
-                }
-            } catch (SQLException ex) {
-                ex.printStackTrace();
+            return false; // 发生 SQL 异常时返回 false
+        }
+
+        return false; // 默认返回 false
+    }
+
+
+
+    public boolean performLikeVideo(Long mid, String bv) {
+        // SQL 查询：检查用户是否已经点赞过这个视频
+        String sqlCheckLike = "SELECT COUNT(*) FROM liked_relation WHERE video_like_BV = ? AND user_like_Mid = ?";
+        // SQL 查询：在 liked_relation 表中插入新记录
+        String sqlInsertLikeRelation = "INSERT INTO liked_relation (video_like_BV, user_like_Mid) VALUES (?, ?)";
+        // SQL 查询：在 liked_relation 表中删除记录
+        String sqlDeleteLikeRelation = "DELETE FROM liked_relation WHERE video_like_BV = ? AND user_like_Mid = ?";
+
+        Connection conn = null;
+        PreparedStatement pstmtCheckLike = null;
+        PreparedStatement pstmtUpdateLikeRelation = null;
+
+        try {
+            // 获取连接并开启事务
+            conn = dataSource.getConnection();
+            conn.setAutoCommit(false); // 关闭自动提交
+
+            // 首先检查用户是否已经点赞过视频
+            pstmtCheckLike = conn.prepareStatement(sqlCheckLike);
+            pstmtCheckLike.setString(1, bv);
+            pstmtCheckLike.setLong(2, mid);
+            ResultSet rsCheckLike = pstmtCheckLike.executeQuery();
+
+            boolean hasLiked = false;
+            if (rsCheckLike.next()) {
+                hasLiked = rsCheckLike.getInt(1) > 0;
             }
+
+            // 根据点赞状态执行相应的操作
+            if (hasLiked) {
+                // 用户已点赞，执行取消点赞操作
+                pstmtUpdateLikeRelation = conn.prepareStatement(sqlDeleteLikeRelation);
+            } else {
+                // 用户未点赞，执行点赞操作
+                pstmtUpdateLikeRelation = conn.prepareStatement(sqlInsertLikeRelation);
+            }
+
+            pstmtUpdateLikeRelation.setString(1, bv);
+            pstmtUpdateLikeRelation.setLong(2, mid);
+            pstmtUpdateLikeRelation.executeUpdate();
+
+            // 提交事务
+            conn.commit();
+            return !hasLiked;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            if (conn != null) {
+                try {
+                    conn.rollback(); // 发生异常时回滚事务
+                } catch (SQLException ex) {
+                    ex.printStackTrace();
+                }
+            }
+            return false;
         } finally {
             // 关闭资源
             try {
-                if (rs != null) rs.close();
-                if (pstmt != null) pstmt.close();
                 if (pstmtCheckLike != null) pstmtCheckLike.close();
-                if (pstmtDeleteLike != null) pstmtDeleteLike.close();
-                if (conn != null) {
-                    conn.setAutoCommit(true);
-                    conn.close();
-                }
+                if (pstmtUpdateLikeRelation != null) pstmtUpdateLikeRelation.close();
+                if (conn != null) conn.close();
             } catch (SQLException e) {
                 e.printStackTrace();
             }
         }
-        return false;
     }
+
 
     public boolean collectVideo(AuthInfo auth, String bv){
         // 验证 auth 是否有效
@@ -972,77 +1230,128 @@ public class VideoServiceImpl implements VideoService{
             return false;
         }
 
+        Long mid;
+        if(auth.getMid() != 0){
+            mid = auth.getMid();
+        } else {
+            // 验证 auth 是否有效，并从中获取用户的 mid
+            mid = getMidFromAuthInfo(auth);
+            if (mid == null) {
+                return false; // 用户认证无效或无法获取用户 ID
+            }
+        }
+
         // 检查 bv 是否无效
-        if (bv == null || bv.isEmpty() || !videoExists(bv)) {
+        if (bv == null || bv.isEmpty()) {
+            return false;
+        }
+
+        // 检查用户是否能搜索到这个视频
+        if (!canUserSearchAndCollectVideo(mid, bv)) {
             return false;
         }
 
         // 执行收藏视频的操作
-        return performCollectVideo(auth, bv);
+        return performCollectVideo(mid, bv);
     }
 
-    private boolean performCollectVideo(AuthInfo auth, String bv) {
-        Connection conn = null;
-        PreparedStatement pstmt = null;
-        ResultSet rs = null;
 
-        try {
-            conn = dataSource.getConnection();
-            // 开启事务
-            conn.setAutoCommit(false);
 
-            // 检查用户是否已经收藏了这个视频
-            String sqlCheckCollect = "SELECT COUNT(*) FROM favorite_relation WHERE video_favorite_BV = ? AND user_favorite_Mid = ?";
-            pstmt = conn.prepareStatement(sqlCheckCollect);
-            pstmt.setString(1, bv);
-            pstmt.setLong(2, auth.getMid());
-            rs = pstmt.executeQuery();
 
-            if (rs.next() && rs.getInt(1) > 0) {
-                // 如果用户已经收藏了这个视频，取消收藏
-                String sqlDeleteCollect = "DELETE FROM favorite_relation WHERE video_favorite_BV = ? AND user_favorite_Mid = ?";
-                pstmt = conn.prepareStatement(sqlDeleteCollect);
-                pstmt.setString(1, bv);
-                pstmt.setLong(2, auth.getMid());
-                pstmt.executeUpdate();
+    private boolean canUserSearchAndCollectVideo(Long mid, String bv) {
+        // SQL 查询：检查用户是否能搜索到视频
+        String sqlSearch = "SELECT COUNT(*) FROM videos v JOIN users u ON v.owner_Mid = u.mid " +
+                "WHERE v.BV = ? AND " +
+                "((v.reviewer != 0 AND v.review_time IS NOT NULL AND v.public_time <= CURRENT_TIMESTAMP) OR u.identity = 'SUPERUSER') " +
+                "AND v.owner_Mid != ?";
 
-                conn.commit();
-                return false; // 收藏已取消
-            } else {
-                // 如果用户尚未收藏这个视频，添加收藏
-                String sqlInsertCollect = "INSERT INTO favorite_relation (video_favorite_BV, user_favorite_Mid) VALUES (?, ?)";
-                pstmt = conn.prepareStatement(sqlInsertCollect);
-                pstmt.setString(1, bv);
-                pstmt.setLong(2, auth.getMid());
-                pstmt.executeUpdate();
+        try (Connection conn = dataSource.getConnection();  // 建立数据库连接
+             PreparedStatement pstmtSearch = conn.prepareStatement(sqlSearch)) {  // 创建 PreparedStatement
 
-                conn.commit();
-                return true; // 收藏成功
+            pstmtSearch.setString(1, bv); // 设置第一个参数，视频的 BV
+            pstmtSearch.setLong(2, mid);  // 设置第二个参数，用户的 mid
+            ResultSet rsSearch = pstmtSearch.executeQuery();
+
+            if (rsSearch.next()) {
+                return rsSearch.getInt(1) > 0; // 如果结果大于0，则用户可以搜索到视频
             }
         } catch (SQLException e) {
             e.printStackTrace();
-            try {
-                if (conn != null) {
-                    conn.rollback();
-                }
-            } catch (SQLException ex) {
-                ex.printStackTrace();
+            return false; // 发生 SQL 异常时返回 false
+        }
+
+        return false; // 默认返回 false
+    }
+
+
+
+
+    public boolean performCollectVideo(Long mid, String bv) {
+        // SQL 查询：检查用户是否已经收藏过这个视频
+        String sqlCheckCollect = "SELECT COUNT(*) FROM favorite_relation WHERE video_favorite_BV = ? AND user_favorite_Mid = ?";
+        // SQL 查询：在 favorite_relation 表中插入新记录
+        String sqlInsertCollectRelation = "INSERT INTO favorite_relation (video_favorite_BV, user_favorite_Mid) VALUES (?, ?)";
+        // SQL 查询：在 favorite_relation 表中删除记录
+        String sqlDeleteCollectRelation = "DELETE FROM favorite_relation WHERE video_favorite_BV = ? AND user_favorite_Mid = ?";
+
+        Connection conn = null;
+        PreparedStatement pstmtCheckCollect = null;
+        PreparedStatement pstmtUpdateCollectRelation = null;
+
+        try {
+            // 获取连接并开启事务
+            conn = dataSource.getConnection();
+            conn.setAutoCommit(false); // 关闭自动提交
+
+            // 首先检查用户是否已经收藏过视频
+            pstmtCheckCollect = conn.prepareStatement(sqlCheckCollect);
+            pstmtCheckCollect.setString(1, bv);
+            pstmtCheckCollect.setLong(2, mid);
+            ResultSet rsCheckCollect = pstmtCheckCollect.executeQuery();
+
+            boolean hasCollected = false;
+            if (rsCheckCollect.next()) {
+                hasCollected = rsCheckCollect.getInt(1) > 0;
             }
+
+            // 根据收藏状态执行相应的操作
+            if (hasCollected) {
+                // 用户已收藏，执行取消收藏操作
+                pstmtUpdateCollectRelation = conn.prepareStatement(sqlDeleteCollectRelation);
+            } else {
+                // 用户未收藏，执行收藏操作
+                pstmtUpdateCollectRelation = conn.prepareStatement(sqlInsertCollectRelation);
+            }
+
+            pstmtUpdateCollectRelation.setString(1, bv);
+            pstmtUpdateCollectRelation.setLong(2, mid);
+            pstmtUpdateCollectRelation.executeUpdate();
+
+            // 提交事务
+            conn.commit();
+            return !hasCollected;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            if (conn != null) {
+                try {
+                    conn.rollback(); // 发生异常时回滚事务
+                } catch (SQLException ex) {
+                    ex.printStackTrace();
+                }
+            }
+            return false;
         } finally {
             // 关闭资源
             try {
-                if (rs != null) rs.close();
-                if (pstmt != null) pstmt.close();
-                if (conn != null) {
-                    conn.setAutoCommit(true);
-                    conn.close();
-                }
+                if (pstmtCheckCollect != null) pstmtCheckCollect.close();
+                if (pstmtUpdateCollectRelation != null) pstmtUpdateCollectRelation.close();
+                if (conn != null) conn.close();
             } catch (SQLException e) {
                 e.printStackTrace();
             }
         }
-        return false;
     }
+
 
     private String hashPasswordWithSHA256(String password) {
         try {

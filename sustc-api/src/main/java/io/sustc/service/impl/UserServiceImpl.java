@@ -46,7 +46,7 @@ public class UserServiceImpl implements UserService {
             return -1;
         }
         // 检查是否存在重复的用户名、QQ号或微信号
-        if (isUserExist(req.getName(), req.getQq(), req.getWechat())) {
+        if (isUserExist(req.getQq(), req.getWechat())) {
             return -1;
         }
 
@@ -92,19 +92,19 @@ public class UserServiceImpl implements UserService {
 
             return true;
         }
-    private boolean isUserExist(String name, String qq, String wechat) {
+    private boolean isUserExist(String qq, String wechat) {
 
 
 
         // 构建SQL查询语句，检查是否存在具有相同用户名、QQ号或微信号的用户
-        String sql = "SELECT COUNT(*) FROM users WHERE name = ? OR qq = ? OR wechat = ?";
+        String sql = "SELECT COUNT(*) FROM users WHERE  qq = ? OR wechat = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             // 设置SQL查询参数
-            pstmt.setString(1, name);
-            pstmt.setString(2, qq);
-            pstmt.setString(3, wechat);
+
+            pstmt.setString(1, qq);
+            pstmt.setString(2, wechat);
 
             // 执行查询
             ResultSet rs = pstmt.executeQuery();
@@ -130,8 +130,13 @@ public class UserServiceImpl implements UserService {
         String sql = "INSERT INTO Users (mid, name, sex, birthday, level, coin, identity, sign, password, qq, wechat) " +
                 "VALUES (?, ?, ?, ?, 0, 0, 'USER', ?, ?, ?, ?)";
 
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+        try {
+            conn = dataSource.getConnection();
+            conn.setAutoCommit(false); // 禁用自动提交，以开始事务
+
+            pstmt = conn.prepareStatement(sql);
 
             // 设置 SQL 参数
             pstmt.setLong(1, mid);
@@ -146,13 +151,33 @@ public class UserServiceImpl implements UserService {
             // 执行 SQL 语句
             int affectedRows = pstmt.executeUpdate();
             if (affectedRows > 0) {
+                conn.commit(); // 提交事务
                 return mid; // 成功插入后返回生成的 mid
+            } else {
+                conn.rollback(); // 如果没有插入行，回滚事务
+                return -1;
             }
         } catch (SQLException e) {
             e.printStackTrace();
+            if (conn != null) {
+                try {
+                    conn.rollback(); // 发生异常时回滚事务
+                } catch (SQLException ex) {
+                    ex.printStackTrace();
+                }
+            }
+            return -1; // 如果发生错误或无法创建用户，则返回 -1
+        } finally {
+            // 关闭资源
+            try {
+                if (pstmt != null) pstmt.close();
+                if (conn != null) conn.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
-        return -1; // 如果发生错误或无法创建用户，则返回 -1
     }
+
 
 
     private long generateUniqueMid() {
@@ -203,41 +228,146 @@ public class UserServiceImpl implements UserService {
         }
     }
     public boolean deleteAccount(AuthInfo auth, long mid) {
-        if (auth == null || mid <= 0) {
+        // 验证 auth 是否有效
+        if (!isValidAuth(auth)) {
             return false;
         }
-        try (Connection conn = dataSource.getConnection()) {
-            // 验证 auth 是否有效
-            if (!isValidAuth(auth)) {
-                return false;
-            }
 
-            // 检查要删除的用户是否存在
-            if (!userExists(mid)) {
-                return false;
+        Long userid;
+        if(auth.getMid() != 0){
+            userid = auth.getMid();
+        } else {
+            // 验证 auth 是否有效，并从中获取用户的 mid
+            userid = getMidFromAuthInfo(auth);
+            if (userid == null) {
+                return false; // 用户认证无效或无法获取用户 ID
             }
+        }
 
-            // 获取当前用户的类型和 ID
-            String currentUserType = getUserType(auth.getMid());
-            if (currentUserType == null) {
-                return false;
-            }
-
-            // 检查权限
-            if ("USER".equals(currentUserType) && auth.getMid() != mid) {
-                return false;
-            }
-            if ("SUPERUSER".equals(currentUserType) && auth.getMid() != mid && !isRegularUser(mid)) {
-                return false;
-            }
 
             // 执行删除操作
-            return deleteUser(mid);
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return false;
+            return performDeleteAccount(userid,mid);
+
     }
+
+    public boolean performDeleteAccount(Long userid, long mid) {
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+        ResultSet rs = null;
+
+        try {
+            // 建立数据库连接
+            conn = dataSource.getConnection();
+
+            // 检查当前用户权限
+            String sql = "SELECT identity FROM users WHERE mid = ?";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setLong(1, userid);
+            rs = pstmt.executeQuery();
+            if (!rs.next()) {
+                return false; // 当前用户不存在
+            }
+            String identity = rs.getString("identity");
+
+            if (identity.equals("USER") && userid != mid) {
+                return false; // 普通用户不能删除其他用户
+            }
+            if (identity.equals("SUPERUSER") && userid != mid) {
+                // 检查要删除的用户是否存在
+                pstmt.close();
+                sql = "SELECT identity FROM users WHERE mid = ?";
+                pstmt = conn.prepareStatement(sql);
+                pstmt.setLong(1, mid);
+                rs = pstmt.executeQuery();
+                if (!rs.next() || rs.getString("identity").equals("SUPERUSER")) {
+                    return false; // 超级用户不能删除其他超级用户或不存在的用户
+                }
+            }
+
+            // 开始事务
+            conn.setAutoCommit(false);
+
+            // 删除users表中的数据
+            sql = "DELETE FROM users WHERE mid = ?";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setLong(1, mid);
+            pstmt.executeUpdate();
+
+            // 删除相关联的数据
+            // 删除 danmu 表中与用户相关的弹幕
+            sql = "DELETE FROM danmu WHERE danmu_Mid = ?";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setLong(1, mid);
+            pstmt.executeUpdate();
+
+// 删除 danmuliked_relation 表中与用户相关的弹幕喜欢关系
+            sql = "DELETE FROM danmuliked_relation WHERE user_liked_Mid = ?";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setLong(1, mid);
+            pstmt.executeUpdate();
+
+// 删除 following_relation 表中与用户相关的关注关系
+            sql = "DELETE FROM following_relation WHERE user_Mid = ? OR follow_Mid = ?";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setLong(1, mid);
+            pstmt.setLong(2, mid);
+            pstmt.executeUpdate();
+
+// 删除 liked_relation 表中与用户相关的视频点赞关系
+            sql = "DELETE FROM liked_relation WHERE user_like_Mid = ?";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setLong(1, mid);
+            pstmt.executeUpdate();
+
+// 删除 coin_relation 表中与用户相关的视频投币关系
+            sql = "DELETE FROM coin_relation WHERE user_coin_Mid = ?";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setLong(1, mid);
+            pstmt.executeUpdate();
+
+// 删除 watched_relation 表中与用户相关的视频观看记录
+            sql = "DELETE FROM watched_relation WHERE user_watched_Mid = ?";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setLong(1, mid);
+            pstmt.executeUpdate();
+
+// 删除 favorite_relation 表中与用户相关的视频收藏关系
+            sql = "DELETE FROM favorite_relation WHERE user_favorite_Mid = ?";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setLong(1, mid);
+            pstmt.executeUpdate();
+// 删除 videos 表中该用户发布的视频
+            sql = "DELETE FROM videos WHERE owner_Mid = ?";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setLong(1, mid);
+            pstmt.executeUpdate();
+
+            // 提交事务
+            conn.commit();
+            return true;
+        } catch (SQLException e) {
+            // 处理异常情况
+            if (conn != null) {
+                try {
+                    conn.rollback(); // 事务回滚
+                } catch (SQLException ex) {
+                    ex.printStackTrace();
+                }
+            }
+            e.printStackTrace();
+            return false;
+        } finally {
+            // 释放资源
+            try {
+                if (rs != null) rs.close();
+                if (pstmt != null) pstmt.close();
+                if (conn != null) conn.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
     private Long getMidFromAuthInfo(AuthInfo auth) {
         String sql = null;
         ResultSet rs = null;
@@ -362,130 +492,11 @@ public class UserServiceImpl implements UserService {
     }
 
 
-    private String getUserType(long mid) {
-        // 检查 mid 是否有效
-        if (mid <= 0) {
-            return null;
-        }
-
-        String sql = "SELECT identity FROM Users WHERE mid = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
-            // 设置查询参数
-            pstmt.setLong(1, mid);
-
-            // 执行查询
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                // 返回查询到的用户类型
-                return rs.getString("identity");
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        // 如果没有找到用户或发生异常，返回 null
-        return null;
-    }
 
 
-    private boolean isRegularUser(long mid) {
-        // 检查 mid 是否有效
-        if (mid <= 0) {
-            return false;
-        }
-
-        String sql = "SELECT identity FROM Users WHERE mid = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
-            // 设置查询参数
-            pstmt.setLong(1, mid);
-
-            // 执行查询
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                // 检查用户类型是否为 "USER"
-                return "USER".equals(rs.getString("identity"));
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        // 如果没有找到用户或发生异常，返回 false
-        return false;
-    }
 
 
-    private boolean deleteUser(long mid) {
-        // 检查 mid 是否有效
-        if (mid <= 0) {
-            return false;
-        }
 
-        Connection conn = null;
-        try {
-            // 尝试获取数据库连接
-            conn = dataSource.getConnection();
-            // 关闭自动提交，以启用事务
-            conn.setAutoCommit(false);
-
-            // 删除与用户相关联的数据
-            deleteRelatedData(conn, mid, "danmu", "danmu_Mid");
-            deleteRelatedData(conn, mid, "following_relation", "user_Mid");
-            deleteRelatedData(conn, mid, "following_relation", "follow_Mid");
-            deleteRelatedData(conn, mid, "liked_relation", "user_like_Mid");
-            deleteRelatedData(conn, mid, "coin_relation", "user_coin_Mid");
-            deleteRelatedData(conn, mid, "watched_relation", "user_watched_Mid");
-            deleteRelatedData(conn, mid, "favorite_relation", "user_favorite_Mid");
-
-            // 删除用户上传的视频
-            deleteRelatedData(conn, mid, "videos", "owner_Mid");
-
-            // 删除用户本身
-            String sql = "DELETE FROM Users WHERE mid = ?";
-            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-                pstmt.setLong(1, mid);
-                int rowsAffected = pstmt.executeUpdate();
-                // 检查是否有行被影响
-                if (rowsAffected > 0) {
-                    conn.commit(); // 如果成功，提交事务
-                    return true;
-                } else {
-                    conn.rollback(); // 如果没有行被影响，回滚事务
-                    return false;
-                }
-            }
-
-        } catch (SQLException e) {
-            // 异常处理
-            e.printStackTrace();
-            if (conn != null) {
-                try {
-                    conn.rollback(); // 在异常情况下回滚事务
-                } catch (SQLException ex) {
-                    ex.printStackTrace();
-                }
-            }
-            return false;
-        } finally {
-            // 最终关闭连接
-            if (conn != null) {
-                try {
-                    conn.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-    }
-
-    private void deleteRelatedData(Connection conn, long mid, String tableName, String columnName) throws SQLException {
-        String sql = "DELETE FROM " + tableName + " WHERE " + columnName + " = ?";
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setLong(1, mid);
-            pstmt.executeUpdate();
-        }
-    }
 
     public boolean follow(AuthInfo auth, long followeeMid) {
         // 验证 auth 是否有效
@@ -493,8 +504,17 @@ public class UserServiceImpl implements UserService {
             return false;
         }
 
-        // 检查被关注的用户是否存在
-        if (!userExists(followeeMid)) {
+        Long userid;
+        if (auth.getMid() != 0) {
+            userid = auth.getMid();
+        } else {
+            // 验证 auth 是否有效，并从中获取用户的 mid
+            userid = getMidFromAuthInfo(auth);
+            if (userid == null) {
+                return false; // 用户认证无效或无法获取用户 ID
+            }
+        }
+        if(userid==followeeMid){
             return false;
         }
 
@@ -505,10 +525,21 @@ public class UserServiceImpl implements UserService {
 
         try {
             conn = dataSource.getConnection();
+
+            // 检查被关注的用户是否存在
+            String userExistsSql = "SELECT COUNT(*) FROM users WHERE mid = ?";
+            checkStmt = conn.prepareStatement(userExistsSql);
+            checkStmt.setLong(1, followeeMid);
+
+            rs = checkStmt.executeQuery();
+            if (!(rs.next() && rs.getInt(1) > 0)) {
+                return false; // 被关注的用户不存在
+            }
+
             // 检查当前用户是否已关注目标用户
             String checkSql = "SELECT COUNT(*) FROM following_relation WHERE user_Mid = ? AND follow_Mid = ?";
             checkStmt = conn.prepareStatement(checkSql);
-            checkStmt.setLong(1, auth.getMid());
+            checkStmt.setLong(1, userid);
             checkStmt.setLong(2, followeeMid);
 
             rs = checkStmt.executeQuery();
@@ -516,17 +547,19 @@ public class UserServiceImpl implements UserService {
                 // 如果已经关注，则取消关注
                 String deleteSql = "DELETE FROM following_relation WHERE user_Mid = ? AND follow_Mid = ?";
                 modifyStmt = conn.prepareStatement(deleteSql);
-                modifyStmt.setLong(1, auth.getMid());
+                modifyStmt.setLong(1, userid);
                 modifyStmt.setLong(2, followeeMid);
                 modifyStmt.executeUpdate();
+                conn.commit();
                 return false; // 关注已取消
             } else {
                 // 如果尚未关注，则添加关注
                 String insertSql = "INSERT INTO following_relation (user_Mid, follow_Mid) VALUES (?, ?)";
                 modifyStmt = conn.prepareStatement(insertSql);
-                modifyStmt.setLong(1, auth.getMid());
+                modifyStmt.setLong(1, userid);
                 modifyStmt.setLong(2, followeeMid);
                 modifyStmt.executeUpdate();
+                conn.commit();
                 return true; // 关注成功
             }
         } catch (SQLException e) {
@@ -552,6 +585,7 @@ public class UserServiceImpl implements UserService {
         }
         return false;
     }
+
 
     public UserInfoResp getUserInfo(long mid) {
         // 使用提供的 userExists 方法来检查用户是否存在
