@@ -69,6 +69,21 @@ public class DatabaseServiceImpl implements DatabaseService {
             String danmuSql = "INSERT INTO danmu (danmu_BV, danmu_Mid, time, content, postTime) VALUES (?, ?, ?, ?, ?)";
             String likbySql = "INSERT INTO danmuliked_relation (danmu_liked_id, user_liked_Mid) VALUES (?, ?)";
 
+
+            String open1="create index index1 on watched_relation(video_watched_BV)";
+            String open2="create index index2 on watched_relation(user_watched_Mid)";
+            String open3="create index index3 on favorite_relation(video_favorite_BV)";
+            String open4="create index index4 on favorite_relation(user_favorite_Mid)";
+            String open5="create index index5 on coin_relation(video_coin_BV)";
+            String open6="create index index6 on coin_relation(user_coin_Mid)";
+            String open7="create index index7 on liked_relation(video_like_BV)";
+            String open8="create index index8 on liked_relation(user_like_Mid)";
+            String open9="create index index9 on following_relation(user_Mid)";
+            String open10="create index index10 on following_relation(follow_Mid)";
+            String open11="create index index11 on danmuLiked_relation(danmu_liked_id)";
+            String open12="create index index12 on danmuLiked_relation(user_liked_Mid)";
+            String open13="create index index13 on danmu(danmu_BV)";
+            String open14="create index index14 on danmu(danmu_Mid)";
             try (
                  PreparedStatement userPstmt = conn.prepareStatement(userSql);
                  PreparedStatement followingPstmt = conn.prepareStatement(followingSql);
@@ -79,8 +94,27 @@ public class DatabaseServiceImpl implements DatabaseService {
                  PreparedStatement favoritePstmt = conn.prepareStatement(favoriteSql);
                  PreparedStatement viewPstmt = conn.prepareStatement(viewSql);
                  PreparedStatement danmuPstmt = conn.prepareStatement(danmuSql, PreparedStatement.RETURN_GENERATED_KEYS);
-                 PreparedStatement likedPstmt1 = conn.prepareStatement(likbySql)) {
+                 PreparedStatement likedPstmt1 = conn.prepareStatement(likbySql);
+                 PreparedStatement open1stmt = conn.prepareStatement(open1);
+                 PreparedStatement open2stmt = conn.prepareStatement(open2);
+                 PreparedStatement open3stmt = conn.prepareStatement(open3);
+                 PreparedStatement open4stmt = conn.prepareStatement(open4);
+                 PreparedStatement open5stmt = conn.prepareStatement(open5);
+                 PreparedStatement open6stmt = conn.prepareStatement(open6);
+                 PreparedStatement open7stmt = conn.prepareStatement(open7);
+                    PreparedStatement open8stmt = conn.prepareStatement(open8);
+                    PreparedStatement open9stmt = conn.prepareStatement(open9);
+                    PreparedStatement open10stmt = conn.prepareStatement(open10);
+                    PreparedStatement open11stmt = conn.prepareStatement(open11);
+PreparedStatement open12stmt = conn.prepareStatement(open12);
+PreparedStatement open13stmt = conn.prepareStatement(open13);
+PreparedStatement open14stmt = conn.prepareStatement(open14)
+
+
+                 ) {
                 int count = 0;
+
+
                 for (UserRecord user : userRecords) {
 //                    String hashedPassword = BCrypt.hashpw(user.getPassword(), BCrypt.gensalt());
                     // 插入用户记录
@@ -207,6 +241,23 @@ public class DatabaseServiceImpl implements DatabaseService {
                         }
                     }
                 }
+
+                open1stmt.execute();
+                open2stmt.execute();
+                open3stmt.execute();
+                open4stmt.execute();
+                open5stmt.execute();
+                open6stmt.execute();
+                open7stmt.execute();
+                open8stmt.execute();
+                open9stmt.execute();
+                open10stmt.execute();
+                open11stmt.execute();
+                open12stmt.execute();
+                open13stmt.execute();
+                open14stmt.execute();
+
+
 
 
             }

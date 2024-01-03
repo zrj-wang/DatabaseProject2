@@ -18,16 +18,15 @@ import java.util.List;
 //zrj-wang
 
 import java.util.Objects;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.*;
 
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 @Service
 @Slf4j
@@ -36,78 +35,57 @@ public class DanmuServiceImpl implements DanmuService {
     private DataSource dataSource;
 
 
-//    private ExecutorService executorService;
+    private ExecutorService executorService;
 
 
-//    @PostConstruct
-//    public void init() {
-//        executorService = Executors.newFixedThreadPool(10);
-//    }
-//
-//    private Cache<Long, Boolean> authCache = CacheBuilder.newBuilder()
-//            .maximumSize(1000)
-//            .expireAfterWrite(30, TimeUnit.MINUTES)
-//            .build();//创建缓存实例
-//
-//    private Cache<WatchedKey, Boolean> watchedVideoCache = CacheBuilder.newBuilder()
-//            .maximumSize(1000)
-//            .expireAfterWrite(1, TimeUnit.HOURS)
-//            .build();
+    private Cache<String, Boolean> watchedVideoCache;
+    @PostConstruct
+    public void init() {
+        executorService = Executors.newFixedThreadPool(8);
 
-//    private static class WatchedKey {
-//        private final long mid;
-//        private final String bv;
-//
-//        WatchedKey(long mid, String bv) {
-//            this.mid = mid;
-//            this.bv = bv;
-//        }
-//
-//        @Override
-//        public boolean equals(Object o) {
-//            if (this == o) return true;
-//            if (o == null || getClass() != o.getClass()) return false;
-//            WatchedKey that = (WatchedKey) o;
-//            return mid == that.mid && Objects.equals(bv, that.bv);
-//        }
-//
-//        @Override
-//        public int hashCode() {
-//            return Objects.hash(mid, bv);
-//        }
-//    }
+        watchedVideoCache = CacheBuilder.newBuilder()
+                .maximumSize(1000) // 最大缓存项数
+                .expireAfterAccess(30, TimeUnit.MINUTES) // 30分钟后过期
+                .build();
+
+
+    }
+
+
 
 
     @Override
     public long sendDanmu(AuthInfo auth, String bv, String content, float time) {
 
-        Long userMid = auth.getMid();
 
-        if (userMid == 0 && (auth.getQq() != null || auth.getWechat() != null)) {
-            userMid = getMidFromAuthInfo(auth);
-            if (userMid == null) {
-                return -1;
-            }
-        }
+        Future<Long> future = executorService.submit(() -> {
 
-
-        if(!validtime(time,bv)){
-            return -1;
-        }
-
-
-//        Future<Long> future = executorService.submit(() -> {
             if ( !isValidAuth(auth)) {
-
                 return -1L;
             }
+
+            Long userMid = auth.getMid();
+
+            if (userMid == 0 && (auth.getQq() != null || auth.getWechat() != null)) {
+                userMid = getMidFromAuthInfo(auth);
+                if (userMid == null) {
+                    return -1L;
+                }
+            }
+
+
+            if(!validtime(time,bv)){
+                return -1L;
+            }
+
+
 
             if ( !videoExists(bv)) {
 
                 return -1L;
             }
 
-            if (content == null || content.trim().isEmpty()) {
+            if (content == null || content.isEmpty()) {
 
                 return -1L;
             }
@@ -123,18 +101,76 @@ public class DanmuServiceImpl implements DanmuService {
             }
 
             return insertDanmu(bv, userMid, content, time);
-    }
-//        });
+
+        });
+
+        try {
+
+            return future.get();
+        } catch (InterruptedException  | ExecutionException e) {
+            log.error("Error occurred while sending danmu", e);
+            Thread.currentThread().interrupt();
+
+            return -1;
+        }
+        }
+
+
+
 //
-//        try {
-//
-//            return future.get();
-//        } catch (InterruptedException  | ExecutionException e) {
-//            log.error("Error occurred while sending danmu", e);
-//            Thread.currentThread().interrupt();
-//
-//            return -1;
+//    public long sendDanmu(AuthInfo auth, String bv, String content, float time) {
+//        if(auth==null){
+//            return -1L;
 //        }
+//
+//        AtomicReference<Long> result = new AtomicReference<>(-1L);
+//        long mid = auth.getMid();
+//        if (auth.getMid() == 0 && (auth.getQq() != null || auth.getWechat() != null)) {
+//            mid = getMidFromAuthInfo(auth);
+//
+//        }
+//
+//        long finalMid = mid;
+//        CompletableFuture<Void> allOf = CompletableFuture.allOf(
+//                CompletableFuture.supplyAsync(() -> isValidAuth(auth), executorService).thenAcceptAsync(authResult -> {
+//                    if (!authResult) {
+//                        result.set(-1L);
+//                    }
+//                }),
+//                CompletableFuture.supplyAsync(() -> validtime(time, bv), executorService).thenAcceptAsync(validTimeResult -> {
+//                    if (!validTimeResult) {
+//                        result.set(-1L);
+//                    }
+//                }),
+//                CompletableFuture.supplyAsync(() -> videoExists(bv), executorService).thenAcceptAsync(videoExistsResult -> {
+//                    if (!videoExistsResult) {
+//                        result.set(-1L);
+//                    }
+//                }),
+//                CompletableFuture.supplyAsync(() -> isVideoPublished(bv), executorService).thenAcceptAsync(videoPublishedResult -> {
+//                    if (!videoPublishedResult) {
+//                        result.set(-1L);
+//                    }
+//                }),
+//                CompletableFuture.supplyAsync(() -> hasWatchedVideo(finalMid, bv), executorService).thenAcceptAsync(watchedVideoResult -> {
+//                    if (!watchedVideoResult) {
+//                        result.set(-1L);
+//                    }
+//                })
+//        );
+//
+//        // 等待所有小方法执行完成
+//        allOf.join();
+//
+//        // 检查是否有小方法返回 -1
+//        if (result.get() == -1L) {
+//            return -1L;
+//        }
+//
+//        // 单独执行 insertDanmu
+//        return insertDanmu(bv, finalMid, content, time);
+//    }
+
 
 
     private boolean validtime(float time,String BV) {
@@ -145,13 +181,14 @@ public class DanmuServiceImpl implements DanmuService {
             ResultSet rs = pstmt.executeQuery();
             if (rs.next()) {
                 float duration = rs.getFloat("duration");
-                return time >= 0 && time <= duration;
+                return time < duration;
             }
         }catch (SQLException e) {
             e.printStackTrace();
         }
         return false;
     }
+
 
 
     private Long getMidFromAuthInfo(AuthInfo auth) {
@@ -285,10 +322,49 @@ public class DanmuServiceImpl implements DanmuService {
 
 
 
+
+//
+//    public boolean hasWatchedVideo(long mid, String bv) {
+//        // 检查参数是否有效
+//        if (mid <= 0 || bv == null || bv.trim().isEmpty()) {
+//            return false;
+//        }
+//
+//        // 创建缓存键
+//        String key = "watched:" + mid + ":" + bv;
+//        Boolean result = watchedVideoCache.getIfPresent(key);
+//
+//        // 检查缓存中是否有结果
+//        if (result != null) {
+//            return result;
+//        }
+//
+//        // 缓存中没有结果，执行数据库查询
+//        String sql = "SELECT COUNT(*) FROM watched_relation WHERE user_watched_Mid = ? AND video_watched_BV = ?";
+//        try (Connection conn = dataSource.getConnection();
+//             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+//
+//            pstmt.setLong(1, mid);
+//            pstmt.setString(2, bv);
+//            ResultSet rs = pstmt.executeQuery();
+//            if (rs.next()) {
+//                boolean hasWatched = rs.getInt(1) > 0;
+//                watchedVideoCache.put(key, hasWatched); // 将结果存储到缓存中
+//                return hasWatched;
+//            }
+//        } catch (SQLException e) {
+//            log.error("SQL Exception in hasWatchedVideo", e);
+//        }
+//
+//        return false;
+//    }
+
+
+
     private boolean isVideoPublished(String bv) {
 
         // 检查bv是否有效
-        if (bv == null || bv.trim().isEmpty()) {
+        if (bv == null || bv.isEmpty()) {
             return false;
         }
         String sql = "SELECT public_time, review_time FROM videos WHERE BV = ?";
@@ -300,9 +376,9 @@ public class DanmuServiceImpl implements DanmuService {
             if (rs.next()) {
                 Timestamp publicTime = rs.getTimestamp("public_time");
                 Timestamp reviewTime = rs.getTimestamp("review_time");
-
-                // 检查public_time是否存在且在review_time之后
-                return publicTime != null && (reviewTime == null || publicTime.after(reviewTime)||publicTime.equals(reviewTime));
+//&& (reviewTime == null || publicTime.after(reviewTime)||publicTime.equals(reviewTime))
+                // 检查public_time是否存在且在review_time之后,貌似不用检查？？？
+                return publicTime != null ;
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -509,14 +585,15 @@ public class DanmuServiceImpl implements DanmuService {
 
                         int rowsAffected = pstmt2.executeUpdate();
 
-                        conn.commit();
-                        return rowsAffected > 0;
+                   //     conn.commit();
+                        //要false
+                        return rowsAffected <= 0;
 
                     } else {
                         // 如果未点赞，添加点赞
 
                         int rowsAffected = pstmt1.executeUpdate();
-                        conn.commit();
+                       // conn.commit();
                         return rowsAffected > 0;
                     }
                 }

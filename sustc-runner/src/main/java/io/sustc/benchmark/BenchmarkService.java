@@ -57,7 +57,7 @@ public class BenchmarkService {
         databaseService.truncate();
     }
 
- //   @BenchmarkStep(order = 1, timeout = 35, description = "Import data")
+  //  @BenchmarkStep(order = 1, timeout = 35, description = "Import data")
     public BenchmarkResult importData() {
         List<DanmuRecord> danmuRecords = deserialize(BenchmarkConstants.IMPORT_DATA, BenchmarkConstants.DANMU_RECORDS);
         List<UserRecord> userRecords = deserialize(BenchmarkConstants.IMPORT_DATA, BenchmarkConstants.USER_RECORDS);
@@ -279,7 +279,7 @@ public class BenchmarkService {
     }
 
 //done
-//    @BenchmarkStep(order = 10, description = "Test DanmuService#sendDanmu(AuthInfo, String, String, float)")
+    @BenchmarkStep(order = 10, description = "Test DanmuService#sendDanmu(AuthInfo, String, String, float)")
 
     public BenchmarkResult danmuSend() {
         List<Map.Entry<Object[], Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.DANMU_SEND);
@@ -314,7 +314,7 @@ public class BenchmarkService {
     }
 
     //done
-   @BenchmarkStep(order = 11, description = "Test UserService#getUserInfo(long)")
+  // @BenchmarkStep(order = 11, description = "Test UserService#getUserInfo(long)")
     public BenchmarkResult getUserInfo() {
         Map<Long, UserInfoResp> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.USER_INFO);
         val pass = new AtomicLong();
