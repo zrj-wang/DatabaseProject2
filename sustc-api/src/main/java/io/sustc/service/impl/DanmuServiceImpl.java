@@ -57,11 +57,11 @@ public class DanmuServiceImpl implements DanmuService {
     @Override
     public long sendDanmu(AuthInfo auth, String bv, String content, float time) {
 
-
-        Future<Long> future = executorService.submit(() -> {
+//
+//        Future<Long> future = executorService.submit(() -> {
 
             if ( !isValidAuth(auth)) {
-                return -1L;
+                return -1;
             }
 
             Long userMid = auth.getMid();
@@ -69,51 +69,51 @@ public class DanmuServiceImpl implements DanmuService {
             if (userMid == 0 && (auth.getQq() != null || auth.getWechat() != null)) {
                 userMid = getMidFromAuthInfo(auth);
                 if (userMid == null) {
-                    return -1L;
+                    return -1;
                 }
             }
 
 
             if(!validtime(time,bv)){
-                return -1L;
+                return -1;
             }
 
 
 
             if ( !videoExists(bv)) {
 
-                return -1L;
+                return -1;
             }
 
             if (content == null || content.isEmpty()) {
 
-                return -1L;
+                return -1;
             }
 
             if (!isVideoPublished(bv)) {
 
-                return -1L;
+                return -1;
             }
 
             if (!hasWatchedVideo(userMid, bv)) {
 
-                return -1L;
+                return -1;
             }
 
             return insertDanmu(bv, userMid, content, time);
+    }
+//        });
+//
+//        try {
+//
+//            return future.get();
+//        } catch (InterruptedException  | ExecutionException e) {
+//            log.error("Error occurred while sending danmu", e);
+//            Thread.currentThread().interrupt();
+//
+//            return -1;
+//        }
 
-        });
-
-        try {
-
-            return future.get();
-        } catch (InterruptedException  | ExecutionException e) {
-            log.error("Error occurred while sending danmu", e);
-            Thread.currentThread().interrupt();
-
-            return -1;
-        }
-        }
 
 
 
@@ -402,21 +402,20 @@ public class DanmuServiceImpl implements DanmuService {
             pstmt.setFloat(3, time);
             pstmt.setString(4, content);
 
-            pstmt.executeUpdate();
-            ResultSet generatedKeys = pstmt.getGeneratedKeys();
-            conn.commit();
+            int rowsAffected = pstmt.executeUpdate();
 
+            if (rowsAffected > 0) {
+                ResultSet generatedKeys = pstmt.getGeneratedKeys();
                 if (generatedKeys.next()) {
-                    return generatedKeys.getLong(1);
-                } else {
-                    return -1;
+                    long danmuID = generatedKeys.getLong(1);
+                    generatedKeys.close();
+                    return danmuID;
                 }
-
-
-
+            }
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
+
         return -1;
 
     }
@@ -520,6 +519,7 @@ public class DanmuServiceImpl implements DanmuService {
 
         Long userMid = auth.getMid();
 
+
         if (userMid == 0 && (auth.getQq() != null || auth.getWechat() != null)) {
             userMid = getMidFromAuthInfo(auth);
             if (userMid == null) {
@@ -529,10 +529,10 @@ public class DanmuServiceImpl implements DanmuService {
 
             // 检查弹幕是否存在
             if (!danmuExists(id)) {
-            //    System.out.println("nodanmu");
                 return false;
             }
-            String sql = "SELECT COUNT(*) FROM danmuLiked_relation WHERE danmu_liked_id = ? AND user_liked_Mid = ?";
+
+        String sql = "SELECT COUNT(*) FROM danmuLiked_relation WHERE danmu_liked_id = ? AND user_liked_Mid = ?";
         String sql1 = "INSERT INTO danmuLiked_relation (danmu_liked_id, user_liked_Mid) VALUES (?, ?)";
         String sql2 = "DELETE FROM danmuLiked_relation WHERE danmu_liked_id = ? AND user_liked_Mid = ?";
         String sql3= "select danmu_bv from danmu where danmu_id=?";
@@ -540,24 +540,21 @@ public class DanmuServiceImpl implements DanmuService {
         String bv="";
         try (Connection conn1 = dataSource.getConnection();
 
-             PreparedStatement pstmt3 = conn1.prepareStatement(sql3)) {
-    pstmt3.setLong(1, id);
-    ResultSet rs3 = pstmt3.executeQuery();
+        PreparedStatement pstmt3 = conn1.prepareStatement(sql3)) {
+        pstmt3.setLong(1, id);
+        ResultSet rs3 = pstmt3.executeQuery();
 
     if (rs3.next()) {
         bv=rs3.getString("danmu_bv");
-
     }
-
-
         }catch (SQLException e) {
-            e.printStackTrace();
+            return false;
         }
+
 
         if(!hasWatchedVideo(userMid,bv)){
             return false;
         }
-
 
 
         try (Connection conn = dataSource.getConnection();
@@ -585,25 +582,21 @@ public class DanmuServiceImpl implements DanmuService {
 
                         int rowsAffected = pstmt2.executeUpdate();
 
-                   //     conn.commit();
                         //要false
-                        return rowsAffected <= 0;
+                        return false;
 
                     } else {
                         // 如果未点赞，添加点赞
 
                         int rowsAffected = pstmt1.executeUpdate();
-                       // conn.commit();
+
                         return rowsAffected > 0;
                     }
                 }
-                conn.commit();
             } catch (SQLException e) {
-                e.printStackTrace();
+                return false;
             }
-
-            System.out.println("final:false");
-            return false;
+    return false;
     }
 
 

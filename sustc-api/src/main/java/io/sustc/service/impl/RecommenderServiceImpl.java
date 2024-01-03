@@ -306,10 +306,69 @@ public class RecommenderServiceImpl implements RecommenderService {
 
 
 
+//    @Override
+//    public List<Long> recommendFriends(AuthInfo auth, int pageSize, int pageNum) {
+//        // 检查认证信息和分页参数的有效性
+//        if (auth == null || !isValidAuth(auth) || pageSize <= 0 || pageNum <= 0) {
+//            return null;
+//        }
+//
+//        Long userMid = auth.getMid();
+//        if (userMid == 0 && (auth.getQq() != null || auth.getWechat() != null)) {
+//            if (getMidFromAuthInfo(auth) == null) {
+//                return null;
+//            }else {
+//                userMid = getMidFromAuthInfo(auth);
+//            }
+//        }
+//
+//        //过不了oj 可能是at least？？？先标记一下
+////        Future<List<Long>> future = executorService.submit(() -> {
+//
+//        String sql = "SELECT fr2.user_Mid, COUNT(*) as common_followings, u.level " +
+//                "FROM following_relation fr1 " +
+//                "JOIN following_relation fr2 ON fr1.follow_Mid = fr2.follow_Mid AND fr1.user_Mid != fr2.user_Mid " +
+//                "JOIN Users u ON fr2.user_Mid = u.mid " +
+//                "WHERE fr1.user_Mid = ? AND fr2.user_Mid NOT IN (SELECT follow_Mid FROM following_relation WHERE user_Mid = ?) " +
+//                "GROUP BY fr2.user_Mid, u.level " +
+//                "ORDER BY common_followings DESC, u.level DESC, fr2.user_Mid ASC " +
+//                "LIMIT ? OFFSET ?";
+////
+//
+//
+//        try (Connection conn = dataSource.getConnection();
+//             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+//            List<Long> recommendedUserIds = new ArrayList<>();
+//
+//            int offset = (pageNum - 1) * pageSize;
+//            pstmt.setLong(1, userMid);
+//            pstmt.setLong(2, userMid);
+//            pstmt.setInt(3, pageSize);
+//            pstmt.setInt(4, offset);
+//
+//            ResultSet rs = pstmt.executeQuery();
+//            while (rs.next()) {
+//                Long userId = rs.getLong("user_Mid");
+//                recommendedUserIds.add(userId);
+//            }
+//            return recommendedUserIds;
+//        } catch (SQLException e) {
+//            throw new RuntimeException(e);
+//        }
+//
+//    }
 
+//        });
 
-
-
+//        try {
+//            // 等待异步执行完成并获取结果
+//            return future.get();
+//        } catch (InterruptedException | ExecutionException e) {
+//            // 异常处理
+//            log.error("Error occurred when likeDanmu", e);
+//            Thread.currentThread().interrupt(); // 重置中断状态
+//            return null;
+//        }
 
     @Override
     public List<Long> recommendFriends(AuthInfo auth, int pageSize, int pageNum) {
@@ -329,7 +388,7 @@ public class RecommenderServiceImpl implements RecommenderService {
 
         //过不了oj 可能是at least？？？先标记一下
 //        Future<List<Long>> future = executorService.submit(() -> {
-        List<Long> recommendedUserIds = new ArrayList<>();
+
         String sql = "SELECT fr2.user_Mid, COUNT(*) as common_followings, u.level " +
                 "FROM following_relation fr1 " +
                 "JOIN following_relation fr2 ON fr1.follow_Mid = fr2.follow_Mid AND fr1.user_Mid != fr2.user_Mid " +
@@ -339,8 +398,11 @@ public class RecommenderServiceImpl implements RecommenderService {
                 "ORDER BY common_followings DESC, u.level DESC, fr2.user_Mid ASC " +
                 "LIMIT ? OFFSET ?";
 //
+
+
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            List<Long> recommendedUserIds = new ArrayList<>();
 
             int offset = (pageNum - 1) * pageSize;
             pstmt.setLong(1, userMid);
@@ -353,25 +415,13 @@ public class RecommenderServiceImpl implements RecommenderService {
                 Long userId = rs.getLong("user_Mid");
                 recommendedUserIds.add(userId);
             }
+            return recommendedUserIds;
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
-
-        return recommendedUserIds;
 
     }
 
-//        });
-
-//        try {
-//            // 等待异步执行完成并获取结果
-//            return future.get();
-//        } catch (InterruptedException | ExecutionException e) {
-//            // 异常处理
-//            log.error("Error occurred when likeDanmu", e);
-//            Thread.currentThread().interrupt(); // 重置中断状态
-//            return null;
-//        }
 
 
 

@@ -50,10 +50,9 @@ public class DatabaseServiceImpl implements DatabaseService {
             List<VideoRecord> videoRecords
     ) {
 
-        Connection conn = null;
-        try {
-            conn= dataSource.getConnection();
-            conn.setAutoCommit(false); // 禁用自动提交，启用事务
+        try (Connection conn= dataSource.getConnection()) {
+            conn.setAutoCommit(false);
+
 
             //users
 
@@ -265,23 +264,7 @@ PreparedStatement open14stmt = conn.prepareStatement(open14)
 
 
         }catch (SQLException e) {
-            if (conn != null) {
-                try {
-                    conn.rollback(); // 在错误情况下回滚事务
-                } catch (SQLException ex) {
-                    throw new RuntimeException("Rollback failed!", ex);
-                }
-            }
-            throw new RuntimeException("Database operation failed", e);
-        } finally {
-            if (conn != null) {
-                try {
-                    conn.setAutoCommit(true); // 恢复自动提交
-                    conn.close();
-                } catch (SQLException ex) {
-                    throw new RuntimeException("Error closing connection", ex);
-                }
-            }
+            throw new RuntimeException(e);
         }
 
         // TODO: implement your import logic
