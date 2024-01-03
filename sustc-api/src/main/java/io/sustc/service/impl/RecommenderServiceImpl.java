@@ -321,7 +321,7 @@ public class RecommenderServiceImpl implements RecommenderService {
         Long userMid = auth.getMid();
         if (userMid == 0 && (auth.getQq() != null || auth.getWechat() != null)) {
             if (getMidFromAuthInfo(auth) == null) {
-                return new ArrayList<>();
+                return null;
             }else {
                 userMid = getMidFromAuthInfo(auth);
             }
@@ -355,10 +355,9 @@ public class RecommenderServiceImpl implements RecommenderService {
             }
         } catch (SQLException e) {
             e.printStackTrace();
-            return null;
         }
 
-        return recommendedUserIds.isEmpty() ? null : recommendedUserIds;
+        return recommendedUserIds;
 
     }
 
