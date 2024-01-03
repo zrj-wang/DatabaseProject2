@@ -659,14 +659,14 @@ public class UserServiceImpl implements UserService {
         return new long[0]; // 如果找不到用户或发生异常，返回空数组
     }
     private String[] getWatchedVideos(Connection conn, long mid) {
-        String sql = "SELECT bv FROM watched_relation WHERE user_Mid = ?";
+        String sql = "SELECT video_watched_BV FROM watched_relation WHERE user_watched_Mid = ?";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setLong(1, mid);
             ResultSet rs = pstmt.executeQuery();
 
             ArrayList<String> watchedList = new ArrayList<>();
             while (rs.next()) {
-                watchedList.add(rs.getString("bv"));
+                watchedList.add(rs.getString("video_watched_BV"));
             }
             return watchedList.toArray(new String[0]);
         } catch (SQLException e) {
@@ -675,14 +675,14 @@ public class UserServiceImpl implements UserService {
         return new String[0]; // 如果找不到用户或发生异常，返回空数组
     }
     private String[] getLikedVideos(Connection conn, long mid) {
-        String sql = "SELECT bv FROM liked_relation WHERE user_Mid = ?";
+        String sql = "SELECT video_like_bv FROM liked_relation WHERE user_like_Mid = ?";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setLong(1, mid);
             ResultSet rs = pstmt.executeQuery();
 
             ArrayList<String> likedList = new ArrayList<>();
             while (rs.next()) {
-                likedList.add(rs.getString("bv"));
+                likedList.add(rs.getString("video_like_BV"));
             }
             return likedList.toArray(new String[0]);
         } catch (SQLException e) {
@@ -698,7 +698,7 @@ public class UserServiceImpl implements UserService {
 
             ArrayList<String> collectedList = new ArrayList<>();
             while (rs.next()) {
-                collectedList.add(rs.getString("bv"));
+                collectedList.add(rs.getString("video_favorite_BV"));
             }
             return collectedList.toArray(new String[0]);
         } catch (SQLException e) {

@@ -325,8 +325,10 @@ public class DanmuServiceImpl implements DanmuService {
             pstmt.setLong(2, mid);
             pstmt.setFloat(3, time);
             pstmt.setString(4, content);
+
             pstmt.executeUpdate();
             ResultSet generatedKeys = pstmt.getGeneratedKeys();
+            conn.commit();
 
                 if (generatedKeys.next()) {
                     return generatedKeys.getLong(1);
@@ -335,10 +337,12 @@ public class DanmuServiceImpl implements DanmuService {
                 }
 
 
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
         return -1;
+
     }
 
 
@@ -423,18 +427,21 @@ public class DanmuServiceImpl implements DanmuService {
 
 
 
+
     @Override
     public boolean likeDanmu(AuthInfo auth, long id) {
-
-
 
 //        Future<Boolean> future = executorService.submit(() -> {
             if (auth == null || id <= 0) {
                 return false;
+
             }
             if (!isValidAuth(auth)) {
+
                 return false;
             }
+
+
         Long userMid = auth.getMid();
 
         if (userMid == 0 && (auth.getQq() != null || auth.getWechat() != null)) {
@@ -446,31 +453,82 @@ public class DanmuServiceImpl implements DanmuService {
 
             // 检查弹幕是否存在
             if (!danmuExists(id)) {
+            //    System.out.println("nodanmu");
                 return false;
             }
-
             String sql = "SELECT COUNT(*) FROM danmuLiked_relation WHERE danmu_liked_id = ? AND user_liked_Mid = ?";
-            try (Connection conn = dataSource.getConnection();
-                 PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        String sql1 = "INSERT INTO danmuLiked_relation (danmu_liked_id, user_liked_Mid) VALUES (?, ?)";
+        String sql2 = "DELETE FROM danmuLiked_relation WHERE danmu_liked_id = ? AND user_liked_Mid = ?";
+        String sql3= "select danmu_bv from danmu where danmu_id=?";
 
+        String bv="";
+        try (Connection conn1 = dataSource.getConnection();
+
+             PreparedStatement pstmt3 = conn1.prepareStatement(sql3)) {
+    pstmt3.setLong(1, id);
+    ResultSet rs3 = pstmt3.executeQuery();
+
+    if (rs3.next()) {
+        bv=rs3.getString("danmu_bv");
+
+    }
+
+
+        }catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        if(!hasWatchedVideo(userMid,bv)){
+            return false;
+        }
+
+
+
+        try (Connection conn = dataSource.getConnection();
+                 PreparedStatement pstmt = conn.prepareStatement(sql);
+        PreparedStatement pstmt1 = conn.prepareStatement(sql1);
+             PreparedStatement pstmt2 = conn.prepareStatement(sql2);
+         ) {
                 pstmt.setLong(1, id);
                 pstmt.setLong(2, userMid);
                 ResultSet rs = pstmt.executeQuery();
-                if (rs.next()) {
+
+            pstmt1.setLong(1, id);
+            pstmt1.setLong(2, userMid);
+
+            pstmt2.setLong(1, id);
+            pstmt2.setLong(2, userMid);
+
+
+            if (rs.next()) {
                     boolean isLiked = rs.getInt(1) > 0;
+
 
                     if (isLiked) {
                         // 如果已点赞，取消点赞
-                        return removeLike(conn, id, auth.getMid());
+
+                        int rowsAffected = pstmt2.executeUpdate();
+
+                        conn.commit();
+                        return rowsAffected > 0;
+
                     } else {
                         // 如果未点赞，添加点赞
-                        return addLike(conn, id, auth.getMid());
+
+                        int rowsAffected = pstmt1.executeUpdate();
+                        conn.commit();
+                        return rowsAffected > 0;
                     }
                 }
+                conn.commit();
             } catch (SQLException e) {
                 e.printStackTrace();
             }
+
+            System.out.println("final:false");
             return false;
+    }
+
 
 //        });
 
@@ -483,7 +541,7 @@ public class DanmuServiceImpl implements DanmuService {
 //        }
 
 
-    }
+
 
 
     private boolean danmuExists(long id) {
@@ -502,37 +560,6 @@ public class DanmuServiceImpl implements DanmuService {
         return false;
     }
 
-    private boolean addLike(Connection conn, long id, long userMid) {
-        if (id <= 0 || userMid <= 0) {
-            return false;
-        }
-        String sql = "INSERT INTO danmuLiked_relation (danmu_liked_id, user_liked_Mid) VALUES (?, ?)";
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setLong(1, id);
-            pstmt.setLong(2, userMid);
-            int rowsAffected = pstmt.executeUpdate();
-            return rowsAffected > 0;
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return false;
-    }
-
-    private boolean removeLike(Connection conn, long id, long userMid) {
-        if (id <= 0 || userMid <= 0) {
-            return false;
-        }
-        String sql = "DELETE FROM danmuLiked_relation WHERE danmu_liked_id = ? AND user_liked_Mid = ?";
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setLong(1, id);
-            pstmt.setLong(2, userMid);
-            int rowsAffected = pstmt.executeUpdate();
-            return rowsAffected > 0;
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return false;
-    }
 
     private String hashPasswordWithSHA256(String password) {
         try {
