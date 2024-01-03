@@ -134,7 +134,7 @@ public class UserServiceImpl implements UserService {
         PreparedStatement pstmt = null;
         try {
             conn = dataSource.getConnection();
-            conn.setAutoCommit(false); // 禁用自动提交，以开始事务
+//            conn.setAutoCommit(false); // 禁用自动提交，以开始事务
 
             pstmt = conn.prepareStatement(sql);
 
@@ -151,31 +151,32 @@ public class UserServiceImpl implements UserService {
             // 执行 SQL 语句
             int affectedRows = pstmt.executeUpdate();
             if (affectedRows > 0) {
-                conn.commit(); // 提交事务
+//                conn.commit(); // 提交事务
                 return mid; // 成功插入后返回生成的 mid
             } else {
-                conn.rollback(); // 如果没有插入行，回滚事务
+//                conn.rollback(); // 如果没有插入行，回滚事务
                 return -1;
             }
         } catch (SQLException e) {
             e.printStackTrace();
-            if (conn != null) {
-                try {
-                    conn.rollback(); // 发生异常时回滚事务
-                } catch (SQLException ex) {
-                    ex.printStackTrace();
-                }
-            }
+//            if (conn != null) {
+//                try {
+//                    conn.rollback(); // 发生异常时回滚事务
+//                } catch (SQLException ex) {
+//                    ex.printStackTrace();
+//                }
+//            }
             return -1; // 如果发生错误或无法创建用户，则返回 -1
-        } finally {
-            // 关闭资源
-            try {
-                if (pstmt != null) pstmt.close();
-                if (conn != null) conn.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
         }
+//        finally {
+//            // 关闭资源
+//            try {
+//                if (pstmt != null) pstmt.close();
+//                if (conn != null) conn.close();
+//            } catch (SQLException e) {
+//                e.printStackTrace();
+//            }
+//        }
     }
 
 
@@ -285,7 +286,7 @@ public class UserServiceImpl implements UserService {
             }
 
             // 开始事务
-            conn.setAutoCommit(false);
+//            conn.setAutoCommit(false);
 
             // 删除users表中的数据
             sql = "DELETE FROM users WHERE mid = ?";
@@ -343,29 +344,30 @@ public class UserServiceImpl implements UserService {
             pstmt.executeUpdate();
 
             // 提交事务
-            conn.commit();
+//            conn.commit();
             return true;
         } catch (SQLException e) {
-            // 处理异常情况
-            if (conn != null) {
-                try {
-                    conn.rollback(); // 事务回滚
-                } catch (SQLException ex) {
-                    ex.printStackTrace();
-                }
-            }
+//            // 处理异常情况
+//            if (conn != null) {
+//                try {
+//                    conn.rollback(); // 事务回滚
+//                } catch (SQLException ex) {
+//                    ex.printStackTrace();
+//                }
+//            }
             e.printStackTrace();
             return false;
-        } finally {
-            // 释放资源
-            try {
-                if (rs != null) rs.close();
-                if (pstmt != null) pstmt.close();
-                if (conn != null) conn.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
         }
+//        finally {
+//            // 释放资源
+//            try {
+//                if (rs != null) rs.close();
+//                if (pstmt != null) pstmt.close();
+//                if (conn != null) conn.close();
+//            } catch (SQLException e) {
+//                e.printStackTrace();
+//            }
+//        }
     }
 
     private Long getMidFromAuthInfo(AuthInfo auth) {
@@ -550,7 +552,7 @@ public class UserServiceImpl implements UserService {
                 modifyStmt.setLong(1, userid);
                 modifyStmt.setLong(2, followeeMid);
                 modifyStmt.executeUpdate();
-                conn.commit();
+//                conn.commit();
                 return false; // 关注已取消
             } else {
                 // 如果尚未关注，则添加关注
@@ -559,30 +561,31 @@ public class UserServiceImpl implements UserService {
                 modifyStmt.setLong(1, userid);
                 modifyStmt.setLong(2, followeeMid);
                 modifyStmt.executeUpdate();
-                conn.commit();
+//                conn.commit();
                 return true; // 关注成功
             }
         } catch (SQLException e) {
             e.printStackTrace();
-        } finally {
-            // 关闭资源
-            try {
-                if (rs != null) {
-                    rs.close();
-                }
-                if (checkStmt != null) {
-                    checkStmt.close();
-                }
-                if (modifyStmt != null) {
-                    modifyStmt.close();
-                }
-                if (conn != null) {
-                    conn.close();
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
         }
+//        finally {
+//            // 关闭资源
+//            try {
+//                if (rs != null) {
+//                    rs.close();
+//                }
+//                if (checkStmt != null) {
+//                    checkStmt.close();
+//                }
+//                if (modifyStmt != null) {
+//                    modifyStmt.close();
+//                }
+//                if (conn != null) {
+//                    conn.close();
+//                }
+//            } catch (SQLException e) {
+//                e.printStackTrace();
+//            }
+//        }
         return false;
     }
 

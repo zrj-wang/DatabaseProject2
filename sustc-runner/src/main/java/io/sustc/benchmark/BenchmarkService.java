@@ -49,7 +49,7 @@ public class BenchmarkService {
     private final Set<Long> registeredUser = new ConcurrentSkipListSet<>();
 
 
- //   @BenchmarkStep(order = 0, description = "Truncate tables")
+    @BenchmarkStep(order = 0, description = "Truncate tables")
 
     public void truncate() {
         if (!config.isStudentMode()) {
@@ -58,6 +58,7 @@ public class BenchmarkService {
         log.warn("Truncating tables");
         databaseService.truncate();
     }
+
 
 
  //   @BenchmarkStep(order = 1, timeout = 35, description = "Import data")
@@ -79,7 +80,7 @@ public class BenchmarkService {
     }
 
 
-  //  @BenchmarkStep(order = 2, description = "Test VideoService#searchVideo(AuthInfo, String, int, int)")
+    @BenchmarkStep(order = 2, description = "Test VideoService#searchVideo(AuthInfo, String, int, int)")
 
     public BenchmarkResult videoSearch1() {
         List<Map.Entry<Object[], List<String>>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.VIDEO_SEARCH_1);
@@ -104,7 +105,7 @@ public class BenchmarkService {
         return new BenchmarkResult(pass, endTime - startTime);
     }
 
-   // @BenchmarkStep(order = 3, description = "Test VideoService#getAverageViewRate(String)")
+    @BenchmarkStep(order = 3, description = "Test VideoService#getAverageViewRate(String)")
     public BenchmarkResult videoViewRate() {
         Map<String, Double> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.VIDEO_VIEW_RATE);
         val pass = new AtomicLong();
@@ -127,7 +128,9 @@ public class BenchmarkService {
         return new BenchmarkResult(pass, endTime - startTime);
     }
 
-  // @BenchmarkStep(order = 4, description = "Test VideoService#getHotspot(String)")
+
+    @BenchmarkStep(order = 4, description = "Test VideoService#getHotspot(String)")
+
     public BenchmarkResult videoHotspot() {
         Map<String, Set<Integer>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.VIDEO_HOTSPOT);
         val pass = new AtomicLong();
@@ -151,7 +154,7 @@ public class BenchmarkService {
     }
 
 //done
- //  @BenchmarkStep(order = 5, timeout = 8, description = "Test RecommenderService#recommendNextVideo(String)")
+   @BenchmarkStep(order = 5, timeout = 8, description = "Test RecommenderService#recommendNextVideo(String)")
 
     public BenchmarkResult recVideo() {
         Map<String, List<String>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.REC_VIDEO);
@@ -179,7 +182,9 @@ public class BenchmarkService {
 
     //ok
 
-   // @BenchmarkStep(order = 6, timeout = 8, description = "Test RecommenderService#generalRecommendations(int, int)")
+
+    @BenchmarkStep(order = 6, timeout = 8, description = "Test RecommenderService#generalRecommendations(int, int)")
+
 
     public BenchmarkResult recGeneral() {
         List<Map.Entry<int[], List<String>>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.REC_GENERAL);
@@ -205,7 +210,9 @@ public class BenchmarkService {
     }
 
     //done
-   // @BenchmarkStep(order = 7, timeout = 8, description = "Test RecommenderService#recommendVideosForUser(AuthInfo, int, int)")
+
+    @BenchmarkStep(order = 7, timeout = 8, description = "Test RecommenderService#recommendVideosForUser(AuthInfo, int, int)")
+
 
     public BenchmarkResult recUser() {
         List<Map.Entry<Object[], List<String>>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.REC_USER);
@@ -231,8 +238,9 @@ public class BenchmarkService {
     }
 
 //注释掉再加
-    //done
- //   @BenchmarkStep(order = 8, timeout = 8, description = "Test RecommenderService#recommendFriends(AuthInfo, int, int)")
+//done
+    @BenchmarkStep(order = 8, timeout = 8, description = "Test RecommenderService#recommendFriends(AuthInfo, int, int)")
+
 
     public BenchmarkResult recFriends() {
         List<Map.Entry<Object[], List<Long>>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.REC_FRIENDS);
@@ -259,7 +267,9 @@ public class BenchmarkService {
 
 //done
 
-  //  @BenchmarkStep(order = 9, description = "Test DanmuService#displayDanmu(String, float, float, boolean)")
+
+    @BenchmarkStep(order = 9, description = "Test DanmuService#displayDanmu(String, float, float, boolean)")
+
     public BenchmarkResult danmuDisplay() {
         List<Map.Entry<Object[], Integer>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.DANMU_DISPLAY);
         val pass = new AtomicLong();
@@ -285,7 +295,7 @@ public class BenchmarkService {
     }
 
 //done
-  //  @BenchmarkStep(order = 10, description = "Test DanmuService#sendDanmu(AuthInfo, String, String, float)")
+    @BenchmarkStep(order = 10, description = "Test DanmuService#sendDanmu(AuthInfo, String, String, float)")
 
     public BenchmarkResult danmuSend() {
         List<Map.Entry<Object[], Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.DANMU_SEND);
@@ -320,7 +330,7 @@ public class BenchmarkService {
     }
 
     //done
-  // @BenchmarkStep(order = 11, description = "Test UserService#getUserInfo(long)")
+   @BenchmarkStep(order = 11, description = "Test UserService#getUserInfo(long)")
     public BenchmarkResult getUserInfo() {
         Map<Long, UserInfoResp> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.USER_INFO);
         val pass = new AtomicLong();
@@ -343,7 +353,7 @@ public class BenchmarkService {
         return new BenchmarkResult(pass, endTime - startTime);
     }
 
- //   @BenchmarkStep(order = 12, description = "Test DanmuService#likeDanmu(AuthInfo, long)")
+  //  @BenchmarkStep(order = 12, description = "Test DanmuService#likeDanmu(AuthInfo, long)")
     public BenchmarkResult danmuLike() {
         Map<Long, AuthInfo> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.DANMU_LIKE);
         val pass = new AtomicLong();
@@ -371,7 +381,9 @@ public class BenchmarkService {
     }
 
 
-   // @BenchmarkStep(order = 13, description = "Test VideoService#coinVideo(AuthInfo, String)")
+
+  //  @BenchmarkStep(order = 13, description = "Test VideoService#coinVideo(AuthInfo, String)")
+
 
     public BenchmarkResult videoCoin() {
         List<Map.Entry<Object[], Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.VIDEO_COIN);
@@ -397,7 +409,9 @@ public class BenchmarkService {
     }
 
 
-   // @BenchmarkStep(order = 14, description = "Test VideoService#likeVideo(AuthInfo, String)")
+
+  //  @BenchmarkStep(order = 14, description = "Test VideoService#likeVideo(AuthInfo, String)")
+
 
     public BenchmarkResult videoLike() {
         List<Map.Entry<Object[], Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.VIDEO_LIKE);
@@ -449,7 +463,9 @@ public class BenchmarkService {
     }
 
 
+
   //  @BenchmarkStep(order = 16, description = "Test VideoService#postVideo(AuthInfo, PostVideoReq)")
+
 
     public BenchmarkResult videoPost() {
         List<Map.Entry<Object[], Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.VIDEO_POST);
@@ -484,7 +500,9 @@ public class BenchmarkService {
     }
 
 
-  //  @BenchmarkStep(order = 17, description = "Test UserService#register(RegisterUserReq)")
+
+ //   @BenchmarkStep(order = 17, description = "Test UserService#register(RegisterUserReq)")
+
 
     public BenchmarkResult userRegister() {
         List<Map.Entry<RegisterUserReq, Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.USER_REGISTER);
@@ -519,7 +537,9 @@ public class BenchmarkService {
     }
 
 
-  //  @BenchmarkStep(order = 18, description = "Test VideoService#updateVideoInfo(AuthInfo, String, PostVideoReq)")
+
+ //   @BenchmarkStep(order = 18, description = "Test VideoService#updateVideoInfo(AuthInfo, String, PostVideoReq)")
+
 
     public BenchmarkResult videoUpdate() {
         List<Map.Entry<Object[], Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.VIDEO_UPDATE);
@@ -545,7 +565,9 @@ public class BenchmarkService {
     }
 
 
- //  @BenchmarkStep(order = 19, description = "Test VideoService#reviewVideo(AuthInfo, String)")
+
+  //  @BenchmarkStep(order = 19, description = "Test VideoService#reviewVideo(AuthInfo, String)")
+
 
     public BenchmarkResult videoReview() {
         List<Map.Entry<Object[], Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.VIDEO_REVIEW);
@@ -584,7 +606,9 @@ public class BenchmarkService {
     }
 
 
- //   @BenchmarkStep(order = 20, description = "Test side effect of step 17, 18")
+
+  //  @BenchmarkStep(order = 20, description = "Test side effect of step 17, 18")
+
 
     public BenchmarkResult videoSearch2() {
         List<Map.Entry<Object[], List<String>>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.VIDEO_SEARCH_2);
@@ -610,7 +634,9 @@ public class BenchmarkService {
     }
 
 
-   // @BenchmarkStep(order = 21, description = "Test VideoService#deleteVideo(AuthInfo, String)")
+
+  //  @BenchmarkStep(order = 21, description = "Test VideoService#deleteVideo(AuthInfo, String)")
+
 
     public BenchmarkResult videoDelete() {
         List<Map.Entry<Object[], Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.VIDEO_DELETE);
@@ -649,7 +675,9 @@ public class BenchmarkService {
         return new BenchmarkResult(pass, endTime - startTime);
     }
 
+
   //  @BenchmarkStep(order = 22, description = "Test UserService#deleteAccount(AuthInfo, long)")
+
     public BenchmarkResult userDelete() {
         List<Map.Entry<Object[], Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.USER_DELETE);
         val pass = new AtomicLong();
