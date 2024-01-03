@@ -49,7 +49,7 @@ public class BenchmarkService {
     private final Set<Long> registeredUser = new ConcurrentSkipListSet<>();
 
 
-  //  @BenchmarkStep(order = 0, description = "Truncate tables")
+    @BenchmarkStep(order = 0, description = "Truncate tables")
 
     public void truncate() {
         if (!config.isStudentMode()) {
@@ -80,7 +80,7 @@ public class BenchmarkService {
     }
 
 
-//    @BenchmarkStep(order = 2, description = "Test VideoService#searchVideo(AuthInfo, String, int, int)")
+    @BenchmarkStep(order = 2, description = "Test VideoService#searchVideo(AuthInfo, String, int, int)")
 
     public BenchmarkResult videoSearch1() {
         List<Map.Entry<Object[], List<String>>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.VIDEO_SEARCH_1);
@@ -105,7 +105,7 @@ public class BenchmarkService {
         return new BenchmarkResult(pass, endTime - startTime);
     }
 
-//    @BenchmarkStep(order = 3, description = "Test VideoService#getAverageViewRate(String)")
+    @BenchmarkStep(order = 3, description = "Test VideoService#getAverageViewRate(String)")
     public BenchmarkResult videoViewRate() {
         Map<String, Double> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.VIDEO_VIEW_RATE);
         val pass = new AtomicLong();
