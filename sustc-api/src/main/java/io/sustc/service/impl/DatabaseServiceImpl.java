@@ -242,20 +242,20 @@ PreparedStatement open14stmt = conn.prepareStatement(open14)
                     }
                 }
 
-                open1stmt.execute();
-                open2stmt.execute();
-                open3stmt.execute();
-                open4stmt.execute();
-                open5stmt.execute();
-                open6stmt.execute();
-                open7stmt.execute();
-                open8stmt.execute();
-                open9stmt.execute();
-                open10stmt.execute();
-                open11stmt.execute();
-                open12stmt.execute();
-                open13stmt.execute();
-                open14stmt.execute();
+//                open1stmt.execute();
+//                open2stmt.execute();
+//                open3stmt.execute();
+//                open4stmt.execute();
+//                open5stmt.execute();
+//                open6stmt.execute();
+//                open7stmt.execute();
+//                open8stmt.execute();
+//                open9stmt.execute();
+//                open10stmt.execute();
+//                open11stmt.execute();
+//                open12stmt.execute();
+//                open13stmt.execute();
+//                open14stmt.execute();
 
 
 
