@@ -18,6 +18,9 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+
+
 
 
 import java.util.concurrent.*;
@@ -33,6 +36,9 @@ import java.util.concurrent.*;
 @Service
 @Slf4j
 public class DatabaseServiceImpl implements DatabaseService {
+
+
+
 
     @Autowired
     private DataSource dataSource;
@@ -119,6 +125,11 @@ PreparedStatement open14stmt = conn.prepareStatement(open14)
 //                    String hashedPassword = BCrypt.hashpw(user.getPassword(), BCrypt.gensalt());
                     // 插入用户记录
                     String hashedPassword = hashPasswordWithSHA256(user.getPassword());
+//                    String hashedPassword = bcryptPassword(user.getPassword());
+//                    String hashedPassword = user.getPassword();
+
+
+
                     userPstmt.setLong(1, user.getMid());
                     userPstmt.setString(2, user.getName());
                     userPstmt.setString(3, user.getSex());
@@ -242,20 +253,20 @@ PreparedStatement open14stmt = conn.prepareStatement(open14)
                     }
                 }
 
-//                open1stmt.execute();
-//                open2stmt.execute();
-//                open3stmt.execute();
-//                open4stmt.execute();
-//                open5stmt.execute();
-//                open6stmt.execute();
-//                open7stmt.execute();
-//                open8stmt.execute();
-//                open9stmt.execute();
-//                open10stmt.execute();
-//                open11stmt.execute();
-//                open12stmt.execute();
-//                open13stmt.execute();
-//                open14stmt.execute();
+                open1stmt.execute();
+                open2stmt.execute();
+                open3stmt.execute();
+                open4stmt.execute();
+                open5stmt.execute();
+                open6stmt.execute();
+                open7stmt.execute();
+                open8stmt.execute();
+                open9stmt.execute();
+                open10stmt.execute();
+                open11stmt.execute();
+                open12stmt.execute();
+                open13stmt.execute();
+                open14stmt.execute();
 
 
 
@@ -274,20 +285,26 @@ PreparedStatement open14stmt = conn.prepareStatement(open14)
         System.out.println(videoRecords.size());
     }
 
+//    private String bcryptPassword(String password) {
+//        BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(10);
+//        return encoder.encode(password);
+//    }
+
 
 
     private String hashPasswordWithSHA256(String password) {
         try {
+
+
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             md.update(password.getBytes());
-
             byte[] digest = md.digest();
             StringBuilder sb = new StringBuilder();
             for (byte b : digest) {
                 sb.append(String.format("%02x", b));
             }
-
             return sb.toString();
+
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("Failed to hash password", e);
         }

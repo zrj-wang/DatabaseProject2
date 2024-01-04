@@ -62,6 +62,8 @@ plugins {
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
     implementation ("com.google.guava:guava:31.0.1-jre")
+    implementation ("org.springframework.boot:spring-boot-starter-security")
+
 
     // You may add any utility library you want to use, such as guava.
     // ORM libraries are prohibited in this project.
