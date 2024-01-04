@@ -396,8 +396,6 @@ public class BenchmarkService {
     //@BenchmarkStep(order = 13, description = "Test VideoService#coinVideo(AuthInfo, String)")
 
 
-
-
     public BenchmarkResult videoCoin() {
         List<Map.Entry<Object[], Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.VIDEO_COIN);
         val pass = new AtomicLong();
@@ -478,9 +476,7 @@ public class BenchmarkService {
     }
 
 
-   // @BenchmarkStep(order = 16, description = "Test VideoService#postVideo(AuthInfo, PostVideoReq)")
-
-
+    @BenchmarkStep(order = 16, description = "Test VideoService#postVideo(AuthInfo, PostVideoReq)")
 
     public BenchmarkResult videoPost() {
         List<Map.Entry<Object[], Boolean>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.VIDEO_POST);
@@ -623,7 +619,6 @@ public class BenchmarkService {
 
 
   //  @BenchmarkStep(order = 20, description = "Test side effect of step 17, 18")
-
 
     public BenchmarkResult videoSearch2() {
         List<Map.Entry<Object[], List<String>>> cases = deserialize(BenchmarkConstants.TEST_DATA, BenchmarkConstants.VIDEO_SEARCH_2);

@@ -52,6 +52,7 @@ public class VideoServiceImpl implements VideoService{
             }
         }
 
+
         // 验证 req 是否有效
         if (req == null || req.getTitle() == null || req.getTitle().isEmpty() || req.getPublicTime()==null||
                 req.getDuration() < 10 ||
