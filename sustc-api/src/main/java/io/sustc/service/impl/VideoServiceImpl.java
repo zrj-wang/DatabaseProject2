@@ -55,7 +55,7 @@ public class VideoServiceImpl implements VideoService{
         // 验证 req 是否有效
         if (req == null || req.getTitle() == null || req.getTitle().isEmpty() || req.getPublicTime()==null||
                 req.getDuration() < 10 ||
-                ( req.getPublicTime().toLocalDateTime().isBefore(LocalDateTime.now())) ||
+                ( req.getPublicTime().before(Timestamp.valueOf(LocalDateTime.now()))) ||
                 isTitleExist(mid, req.getTitle())) {
             return null;
         }
@@ -76,7 +76,8 @@ public class VideoServiceImpl implements VideoService{
 
     // 将视频信息插入数据库
     private boolean insertVideoInfo(long mid, String bv, PostVideoReq req) {
-        String sql = "INSERT INTO videos (BV, title, owner_Mid, commit_time, review_time, public_time, duration, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+
+        String sql = "INSERT INTO videos (BV, title, owner_Mid, commit_time, public_time, duration, description) VALUES (?, ?, ?, ?, ?, ?, ?)";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
@@ -84,10 +85,9 @@ public class VideoServiceImpl implements VideoService{
             pstmt.setString(2, req.getTitle());
             pstmt.setLong(3, mid);
             pstmt.setTimestamp(4, Timestamp.valueOf(LocalDateTime.now())); // commit_time
-            pstmt.setTimestamp(5, null); // review_time
-            pstmt.setTimestamp(6, req.getPublicTime()); // public_time
-            pstmt.setLong(7, (long) req.getDuration());
-            pstmt.setString(8, req.getDescription());
+            pstmt.setTimestamp(5, req.getPublicTime()); // public_time
+            pstmt.setLong(6, (long) req.getDuration());
+            pstmt.setString(7, req.getDescription());
 
             int rowsAffected = pstmt.executeUpdate();
             if (rowsAffected > 0) {
